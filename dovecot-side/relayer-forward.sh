@@ -18,6 +18,13 @@ TIMEOUT_SECONDS=5
 
 TOKEN=$(cat "$TOKEN_PATH" 2>/dev/null)
 
+if [ -z "$TOKEN" ]; then
+  # Never block delivery over this, but at least leave a trail: stderr
+  # from Sieve pipe scripts is written to the LDA/sieve log, so this is
+  # visible in Dovecot's own logs without needing to cross-check Relayer.
+  echo "relayer-forward: WARNING: token empty or unreadable at $TOKEN_PATH (running as $(id -un 2>/dev/null))" >&2
+fi
+
 curl -s -m "$TIMEOUT_SECONDS" -X POST \
   -H "Authorization: Bearer ${TOKEN}" \
   --data-binary @- \

@@ -145,7 +145,14 @@ spec:
         - name: relayer-ingest-token
           secret:
             secretName: relayer-secrets   # the same Secret Relayer itself uses
-            defaultMode: 0400
+            # 0444 (world-readable within the container), not 0400 --
+            # Sieve pipe scripts run as vmail (uid 5000, gid 12), not
+            # root, and the pod has no fsGroup set to grant group access
+            # instead. World-readable is fine here: the container
+            # filesystem namespace is the real security boundary, and
+            # this token only authorizes the /ingest endpoint, not
+            # mailbox access.
+            defaultMode: 0444
             items:
               - key: INGEST_TOKEN
                 path: relayer-token

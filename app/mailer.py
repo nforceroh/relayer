@@ -3,6 +3,7 @@
 import email
 import email.policy
 import email.utils
+import html
 import logging
 import os
 import re
@@ -17,6 +18,8 @@ POSTFIX_HOST = os.environ.get("POSTFIX_HOST", "postfix")
 POSTFIX_PORT = int(os.environ.get("POSTFIX_PORT", "25"))
 
 CODE_PATTERN = re.compile(r"\b(\d{4,8})\b")
+TAG_PATTERN = re.compile(r"<[^>]+>")
+WHITESPACE_PATTERN = re.compile(r"[ \t]*\n[ \t]*")
 
 
 def resolve_mailbox(original: email.message.Message) -> str | None:
@@ -29,44 +32,89 @@ def resolve_mailbox(original: email.message.Message) -> str | None:
     return None
 
 
-def _extract_body_text(original: email.message.Message) -> str:
+def _extract_parts(original: email.message.Message) -> tuple[str, str]:
+    """Returns (plain_text, html_text) -- either may be empty, but not both
+    unless the message genuinely has neither part."""
+    plain_text = ""
+    html_text = ""
+
     if original.is_multipart():
         for part in original.walk():
-            if part.get_content_type() == "text/plain":
+            content_type = part.get_content_type()
+            if content_type == "text/plain" and not plain_text:
                 try:
-                    return part.get_content()
+                    plain_text = part.get_content()
                 except Exception:
-                    return ""
-        return ""
+                    pass
+            elif content_type == "text/html" and not html_text:
+                try:
+                    html_text = part.get_content()
+                except Exception:
+                    pass
+        return plain_text, html_text
+
+    content_type = original.get_content_type()
     try:
-        return original.get_content()
+        content = original.get_content()
     except Exception:
-        return ""
+        return "", ""
+    if content_type == "text/html":
+        return "", content
+    return content, ""
 
 
-def _extract_code(subject: str, body_text: str) -> str | None:
-    match = CODE_PATTERN.search(subject) or CODE_PATTERN.search(body_text or "")
-    return match.group(1) if match else None
+def _html_to_text(html_text: str) -> str:
+    """Rough HTML-to-text fallback for plain-text mail clients -- strips
+    tags and decodes entities. Not meant to be pretty, just readable."""
+    text = TAG_PATTERN.sub(" ", html_text)
+    text = html.unescape(text)
+    text = re.sub(r"[ \t]+", " ", text)
+    text = WHITESPACE_PATTERN.sub("\n", text)
+    return text.strip()
+
+
+def _extract_code(subject: str, plain_text: str, html_text: str) -> str | None:
+    for candidate in (subject, plain_text, html_text):
+        match = CODE_PATTERN.search(candidate or "")
+        if match:
+            return match.group(1)
+    return None
 
 
 def build_forward(mailbox: str, original: email.message.Message, recipient: str) -> EmailMessage:
     original_from = original.get("From", "unknown sender")
     original_subject = original.get("Subject", "(no subject)")
-    body_text = _extract_body_text(original)
-    code = _extract_code(original_subject, body_text)
+    plain_text, html_text = _extract_parts(original)
+    code = _extract_code(original_subject, plain_text, html_text)
     subject_prefix = f"[Code: {code}] " if code else ""
+
+    preamble_plain = (
+        f"Forwarded message, originally from: {original_from}\n"
+        f"Originally sent to: {mailbox}\n\n"
+        f"----- Original message -----\n\n"
+    )
 
     msg = EmailMessage()
     msg["From"] = mailbox  # the mailbox's own (verified) domain -- no rewriting needed
     msg["To"] = recipient
     msg["Subject"] = f"{subject_prefix}Fwd: {original_subject}"
     msg["Message-ID"] = email.utils.make_msgid(domain=mailbox.split("@", 1)[-1])
-    msg.set_content(
-        f"Forwarded message, originally from: {original_from}\n"
-        f"Originally sent to: {mailbox}\n\n"
-        f"----- Original message -----\n\n"
-        f"{body_text}"
-    )
+
+    if html_text:
+        # Plain-text part is a fallback for text-only clients -- prefer the
+        # original's own plain-text part if it had one, otherwise derive a
+        # rough readable version from the HTML rather than dumping raw markup.
+        plain_body = preamble_plain + (plain_text or _html_to_text(html_text))
+        msg.set_content(plain_body)
+
+        preamble_html = (
+            f"<p>Forwarded message, originally from: {html.escape(original_from)}<br>"
+            f"Originally sent to: {html.escape(mailbox)}</p><hr>"
+        )
+        msg.add_alternative(preamble_html + html_text, subtype="html")
+    else:
+        msg.set_content(preamble_plain + plain_text)
+
     msg.add_attachment(
         original.as_bytes(),
         maintype="message",
