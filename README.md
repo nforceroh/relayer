@@ -28,7 +28,7 @@ verified) domain -- there is no header to reject.
                     -----------------------------------------
 Inbound mail  --->  LMTP delivery into real mailbox
                         |
-                        +--> global Sieve: pipe :copy relayer-forward.py
+                        +--> global Sieve: pipe :copy relayer-forward.sh
                                                   |
                                                   | HTTP POST, bearer token
                                                   v
@@ -151,40 +151,83 @@ the example values are placeholders.
 Put the web UI behind whatever TLS/ingress you already use for other
 internal tools. Basic Auth is a baseline here, not a substitute for TLS.
 
-### 4. Dovecot side (no image rebuild required)
+### 4. Dovecot side (ConfigMap + Secret -- no image rebuild required)
 
 Your existing Dovecot image already ships `dovecot-pigeonhole-plugin` and
-`python3` -- nothing new to install in the image itself.
+`python3` -- nothing new to install in the image itself, and nothing in
+this step touches the Dockerfile.
 
-Add to your Sieve plugin config (e.g. `90-sieve.conf`):
+Since your Dovecot deployment already uses Kustomize (with
+`disableNameSuffixHash: true`, so generated ConfigMap names stay literal
+-- important, since `k8s/dovecot-deployment.yaml` references
+`relayer-dovecot-sieve` by exact name), add it as a `configMapGenerator`
+rather than hand-running `kubectl create configmap`:
 
-```
-plugin {
-  sieve_plugins = sieve_extprograms
-  sieve_extprograms_bin_dir = /data/sieve-scripts
-  sieve_before = /etc/dovecot/sieve/global-before.sieve
-}
-```
+1. Copy the three canonical files into your Dovecot kustomize directory,
+   under a `relayer/` subfolder:
+   ```bash
+   mkdir -p <your-dovecot-kustomize-dir>/relayer
+   cp dovecot-side/91-relayer-sieve.conf \
+      dovecot-side/global-before.sieve \
+      dovecot-side/relayer-forward.sh \
+      <your-dovecot-kustomize-dir>/relayer/
+   ```
 
-Ship `dovecot-side/global-before.sieve` into your config tree at
-`/etc/dovecot/sieve/global-before.sieve`, and compile it once:
+2. Add the generator to your `kustomization.yaml` (see
+   `k8s/dovecot-kustomization.yaml` for the full merged file -- only the
+   `relayer-dovecot-sieve` entry under `configMapGenerator` is new,
+   everything else is your existing config untouched):
+   ```yaml
+   configMapGenerator:
+     - name: dovecot-env
+       envs:
+         - maps/env.txt
+     - name: relayer-dovecot-sieve
+       files:
+         - relayer/91-relayer-sieve.conf
+         - relayer/global-before.sieve
+         - relayer/relayer-forward.sh
+   ```
+
+3. Replace your `deployment.yaml` with `k8s/dovecot-deployment.yaml` (or
+   merge the marked `relayer-*` volumes/volumeMounts in by hand) -- it
+   adds two volumes (the generated ConfigMap above, and the
+   `INGEST_TOKEN` key from the same `relayer-secrets` Secret Relayer
+   itself uses, so the token only has to be set in one place) and mounts
+   them via `subPath` into `/etc/dovecot/conf.d/` and
+   `/configfiles/sieve/`.
+
+Your existing sieve-init script (the one that copies `/configfiles/sieve`
+into `/data/sieve`, runs `sievec` on every `.sieve` file, `chmod +x`'s
+every `.sh` file, and `chown`'s the result to `vmail:mail`) picks up
+`global-before.sieve` and `relayer-forward.sh` automatically -- no
+changes needed to that script. This is also why the pipe script is `.sh`
+rather than `.py`: your init script's chmod loop only matches `*.sh`, and
+this piggybacks on it rather than asking you to extend it.
+
+`subPath` is required for the `conf.d/` and `configfiles/sieve/` mounts
+specifically because those directories already contain other files baked
+into your image -- a normal (non-subPath) volume mount replaces a
+directory's entire contents, which would hide everything else already
+there.
+
+Note: since `relayer-secrets` lives in the `mail` namespace (matching
+your `namespace: mail` kustomize setting) and Relayer's own manifests
+also target `mail`, the cross-reference just works -- no namespace
+mismatch to worry about here.
+
+Build and apply:
 
 ```bash
-sievec /etc/dovecot/sieve/global-before.sieve
+kubectl kustomize <your-dovecot-kustomize-dir> | kubectl apply -f -
+kubectl rollout restart deployment/dovecot -n mail
 ```
 
-Drop `dovecot-side/relayer-forward.py` onto your existing `/data` volume
-at `/data/sieve-scripts/relayer-forward.py`, executable:
-
-```bash
-chmod +x /data/sieve-scripts/relayer-forward.py
-```
-
-Put the bearer token (matching `INGEST_TOKEN` in Relayer's secret) at
-`/data/secrets/relayer-token` -- ideally mounted from a k8s Secret rather
-than written by hand, so it's easy to rotate.
-
-Restart/reload Dovecot to pick up the plugin config change.
+Note: ConfigMap-backed volumes mounted via `subPath` don't live-update
+when the ConfigMap changes (a known Kubernetes limitation) -- after
+editing anything under `relayer/`, re-run `kubectl apply` and
+`rollout restart` Dovecot again to pick it up. Given Sieve here is meant
+to stay dumb and unconditional, this should rarely need to change.
 
 ### 5. Convert forwarding addresses from Alias to Mailbox
 
@@ -218,6 +261,7 @@ are configured.
 | `POSTFIX_PORT` | Relayer | SMTP port on that host | `25` |
 | `ADMIN_USER` | Relayer | Web UI Basic Auth username | `admin` |
 | `ADMIN_PASS` | Relayer | Web UI Basic Auth password | *(none -- must be set via Secret)* |
+| `LOG_LEVEL` | Relayer | Set to `DEBUG` to log `/ingest` auth-check details (header lengths/tails, never the full token) and the raw SMTP conversation | `INFO` |
 | `INGEST_TOKEN` | Relayer + Dovecot script | Shared bearer token authorizing `/ingest` calls | *(none -- must be set via Secret)* |
 | `SECRET_KEY` | Relayer | Flask session/flash-message signing key | *(none -- must be set via Secret)* |
 

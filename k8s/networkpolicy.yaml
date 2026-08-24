@@ -1,0 +1,29 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: relayer-restrict-ingress
+  namespace: mail
+spec:
+  podSelector:
+    matchLabels:
+      app: relayer
+  policyTypes:
+    - Ingress
+  ingress:
+    # Adjust the podSelector below to match your actual Dovecot pod's labels.
+    - from:
+        - podSelector:
+            matchLabels:
+              app: dovecot
+      ports:
+        - protocol: TCP
+          port: 8080
+    # Allow whatever ingress controller you use to reach the web UI --
+    # adjust to your actual ingress-controller namespace/labels.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 8080

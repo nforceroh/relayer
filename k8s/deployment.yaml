@@ -38,6 +38,8 @@ spec:
               value: "25"
             - name: ADMIN_USER
               value: "admin"
+            - name: LOG_LEVEL
+              value: "INFO"   # set to "DEBUG" temporarily to trace /ingest auth + SMTP conversation
           envFrom:
             - secretRef:
                 name: relayer-secrets   # DB_PASSWORD, ADMIN_PASS, INGEST_TOKEN, SECRET_KEY

@@ -2,6 +2,7 @@
 
 import email
 import email.policy
+import email.utils
 import logging
 import os
 import re
@@ -9,6 +10,8 @@ import smtplib
 from email.message import EmailMessage
 
 log = logging.getLogger("relayer.mailer")
+
+DEBUG_SMTP = os.environ.get("LOG_LEVEL", "INFO").upper() == "DEBUG"
 
 POSTFIX_HOST = os.environ.get("POSTFIX_HOST", "postfix")
 POSTFIX_PORT = int(os.environ.get("POSTFIX_PORT", "25"))
@@ -57,6 +60,7 @@ def build_forward(mailbox: str, original: email.message.Message, recipient: str)
     msg["From"] = mailbox  # the mailbox's own (verified) domain -- no rewriting needed
     msg["To"] = recipient
     msg["Subject"] = f"{subject_prefix}Fwd: {original_subject}"
+    msg["Message-ID"] = email.utils.make_msgid(domain=mailbox.split("@", 1)[-1])
     msg.set_content(
         f"Forwarded message, originally from: {original_from}\n"
         f"Originally sent to: {mailbox}\n\n"
@@ -73,8 +77,24 @@ def build_forward(mailbox: str, original: email.message.Message, recipient: str)
 
 
 def send(msg: EmailMessage) -> None:
+    log.debug(
+        "smtp connect: host=%s port=%s from=%s to=%s subject=%r",
+        POSTFIX_HOST, POSTFIX_PORT, msg["From"], msg["To"], msg["Subject"],
+    )
     with smtplib.SMTP(POSTFIX_HOST, POSTFIX_PORT, timeout=10) as smtp:
-        smtp.send_message(msg)
+        if DEBUG_SMTP:
+            # Prints the raw SMTP conversation (EHLO/MAIL FROM/RCPT TO/DATA
+            # and the server's responses) to stderr, which shows up
+            # alongside the rest of the container's logs.
+            smtp.set_debuglevel(1)
+        refused = smtp.send_message(msg)
+        if refused:
+            # send_message only raises if ALL recipients are refused; a
+            # partial refusal (rare here, single-recipient sends) returns
+            # a dict instead and would otherwise pass silently.
+            log.warning("smtp partial refusal: %s", refused)
+        else:
+            log.debug("smtp accepted: to=%s", msg["To"])
 
 
 def process_raw_message(raw: bytes, recipients_lookup) -> dict:
@@ -91,11 +111,15 @@ def process_raw_message(raw: bytes, recipients_lookup) -> dict:
         log.warning("could not determine target mailbox; headers=%s", list(original.keys()))
         return {"status": "no_mailbox"}
 
+    log.debug("resolved mailbox=%s subject=%r from=%r", mailbox, original.get("Subject"), original.get("From"))
+
     try:
         recipients = recipients_lookup(mailbox)
     except Exception:
         log.exception("recipient lookup failed for %s", mailbox)
         return {"status": "lookup_error", "mailbox": mailbox}
+
+    log.debug("recipients for %s: %s", mailbox, recipients)
 
     if not recipients:
         log.info("no active recipients for %s", mailbox)

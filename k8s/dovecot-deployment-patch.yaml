@@ -1,0 +1,43 @@
+# Merge this into your existing Dovecot Deployment's pod spec.
+# Nothing here touches the image -- everything is mounted at runtime.
+
+# --- add to spec.template.spec.volumes ---
+volumes:
+  - name: relayer-sieve-config
+    configMap:
+      name: relayer-dovecot-sieve
+      defaultMode: 0644
+      items:
+        - key: 91-relayer-sieve.conf
+          path: 91-relayer-sieve.conf
+        - key: global-before.sieve
+          path: global-before.sieve
+        - key: relayer-forward.py
+          path: relayer-forward.py
+          mode: 0755   # needs to be executable; other two stay 0644
+  - name: relayer-ingest-token
+    secret:
+      secretName: relayer-secrets   # the same Secret Relayer itself uses
+      defaultMode: 0400
+      items:
+        - key: INGEST_TOKEN
+          path: relayer-token
+
+# --- add to the dovecot container's volumeMounts ---
+# subPath is required here since /etc/dovecot/conf.d/ and /etc/dovecot/sieve/
+# already contain other files baked into the image -- a non-subPath mount
+# would hide everything else in those directories.
+volumeMounts:
+  - name: relayer-sieve-config
+    mountPath: /etc/dovecot/conf.d/91-relayer-sieve.conf
+    subPath: 91-relayer-sieve.conf
+  - name: relayer-sieve-config
+    mountPath: /etc/dovecot/sieve/global-before.sieve
+    subPath: global-before.sieve
+  - name: relayer-sieve-config
+    mountPath: /etc/dovecot/sieve-programs/relayer-forward.py
+    subPath: relayer-forward.py
+  - name: relayer-ingest-token
+    mountPath: /etc/dovecot/secrets/relayer-token
+    subPath: relayer-token
+    readOnly: true

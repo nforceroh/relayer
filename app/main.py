@@ -6,8 +6,10 @@ from flask import Flask, Response, flash, redirect, render_template, request, ur
 
 from . import db, mailer
 
-logging.basicConfig(level=logging.INFO)
+LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
+logging.basicConfig(level=getattr(logging, LOG_LEVEL, logging.INFO))
 log = logging.getLogger("relayer")
+log.setLevel(getattr(logging, LOG_LEVEL, logging.INFO))
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "change-me-in-production")
@@ -89,10 +91,30 @@ def ingest():
         return Response("not configured", 503)
 
     auth_header = request.headers.get("Authorization", "")
-    if auth_header != f"Bearer {INGEST_TOKEN}":
+    expected = f"Bearer {INGEST_TOKEN}"
+
+    log.debug(
+        "ingest auth check: remote=%s got_header=%s got_len=%d expected_len=%d "
+        "got_tail=%r expected_tail=%r match=%s",
+        request.remote_addr,
+        bool(auth_header),
+        len(auth_header),
+        len(expected),
+        auth_header[-6:] if auth_header else "",
+        expected[-6:],
+        auth_header == expected,
+    )
+
+    if auth_header != expected:
+        log.warning(
+            "ingest rejected: remote=%s content_length=%s reason=token_mismatch",
+            request.remote_addr, request.content_length,
+        )
         return Response("unauthorized", 401)
 
     raw = request.get_data()
+    log.debug("ingest accepted: remote=%s bytes=%d", request.remote_addr, len(raw))
+
     result = mailer.process_raw_message(raw, db.get_active_recipients)
     log.info("ingest result: %s", result)
     return result, 200
