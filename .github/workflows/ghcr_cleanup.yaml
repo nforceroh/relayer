@@ -1,0 +1,41 @@
+name: Cleanup old GHCR images
+
+on:
+  push:
+    branches:
+      - main
+  schedule:
+    - cron: "17 3 * * 0"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Preview deletions only"
+        required: false
+        default: "true"
+
+jobs:
+  cleanup-ghcr:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Get image name
+        run: echo "IMAGE_NAME=$(echo ${{ github.repository }} | cut -d'/' -f2)" >> "$GITHUB_ENV"
+
+      - name: Dry run mode
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'true' }}
+        run: echo "Dry run enabled. Skipping deletion."
+
+      - name: Cleanup old image versions
+        if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.dry_run != 'true' }}
+        uses: actions/delete-package-versions@v5
+        with:
+          owner: ${{ github.repository_owner }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          package-name: ${{ env.IMAGE_NAME }}
+          package-type: container
+          min-versions-to-keep: 5
+          delete-only-untagged-versions: "true"

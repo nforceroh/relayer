@@ -1,0 +1,59 @@
+name: Docker Image for GHCR
+
+on:
+  push:
+
+jobs:
+  deploy-docker-image:
+    runs-on: ubuntu-latest
+  
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write  
+
+    steps:
+      - name: Get repo name
+        run: echo "IMAGE_NAME=$(echo ${{ github.repository }} | cut -d'/' -f2)" >> $GITHUB_ENV
+      - name: Set build date
+        id: date
+        run: echo "BUILD_DATE=$(date +'%Y%m%d%H%M%S')" >> $GITHUB_ENV
+      - name: Variables defined
+        run: |
+          echo "IMAGE_NAME              = ${{ env.IMAGE_NAME }}"
+          echo "BUILD_DATE              = ${{ env.BUILD_DATE }}"
+          echo "github.repository_owner = ${{ github.repository_owner }}"
+      - run: echo "Starting build for ${{ github.repository }}"
+      - uses: actions/checkout@v3
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@v4
+        with:
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern=version
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable=${{ github.ref == format('refs/heads/{0}', 'main') }}
+            type=schedule,pattern={{date 'YYYYMMDD-hhmmss' tz='US/Eastern'}}
+          images: ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}     
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}     
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:${{ env.BUILD_DATE }}
+            ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:latest
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            BUILD_DATE=${{ env.BUILD_DATE }}
+            VERSION=${{ env.BUILD_DATE }}
+

@@ -1,0 +1,6 @@
+#!/command/with-contenv sh
+
+cd /data/web/relayer
+
+exec s6-setuidgid relayer \
+  gunicorn --bind 0.0.0.0:8080 --workers 2 --access-logfile - --error-logfile - wsgi:app

@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block content %}
+
+<section>
+  <h2>Add a recipient</h2>
+  <form method="post" action="{{ url_for('add_recipient') }}">
+    <div class="grid">
+      <label>Mailbox
+        <input type="email" name="mailbox" placeholder="toyota@martintwingles.com" required>
+      </label>
+      <label>Forward to
+        <input type="email" name="recipient" placeholder="someone@example.com" required>
+      </label>
+      <label>Label (optional)
+        <input type="text" name="label" placeholder="e.g. Sylvain">
+      </label>
+    </div>
+    <button type="submit">Add</button>
+  </form>
+</section>
+
+<hr>
+
+{% if not grouped %}
+  <p>No forwarding rules yet. Add one above.</p>
+{% else %}
+  {% for mailbox, rows in grouped.items() %}
+  <section>
+    <h3>{{ mailbox }}</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Recipient</th>
+          <th>Label</th>
+          <th>Status</th>
+          <th>Added</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+        <tr>
+          <td>{{ row.recipient }}</td>
+          <td>{{ row.label or '' }}</td>
+          <td>{{ 'Active' if row.enabled else 'Disabled' }}</td>
+          <td><small>{{ row.created_at }}</small></td>
+          <td style="white-space: nowrap;">
+            <form method="post" action="{{ url_for('toggle_recipient', row_id=row.id) }}" style="display:inline">
+              <input type="hidden" name="enabled" value="{{ 0 if row.enabled else 1 }}">
+              <button type="submit" class="secondary outline">
+                {{ 'Disable' if row.enabled else 'Enable' }}
+              </button>
+            </form>
+            <form method="post" action="{{ url_for('delete_recipient', row_id=row.id) }}" style="display:inline"
+                  onsubmit="return confirm('Remove {{ row.recipient }} from {{ mailbox }}?');">
+              <button type="submit" class="contrast outline">Remove</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+  {% endfor %}
+{% endif %}
+
+{% endblock %}

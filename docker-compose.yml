@@ -1,0 +1,57 @@
+version: "3.8"
+
+# Local dev/test stack -- NOT the production topology.
+# Spins up: MariaDB (seeded with schema.sql), Relayer itself, and MailHog
+# as a stand-in SMTP server so you can see forwarded messages in a browser
+# instead of needing your real Postfix relay.
+
+services:
+  mariadb:
+    image: mariadb:11
+    restart: unless-stopped
+    environment:
+      MARIADB_ROOT_PASSWORD: rootpass
+      MARIADB_DATABASE: mail
+      MARIADB_USER: relayer
+      MARIADB_PASSWORD: relayerpass
+    volumes:
+      - ./schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./local/seed.sql:/docker-entrypoint-initdb.d/02-seed.sql:ro
+    ports:
+      - "3306:3306"
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  mailhog:
+    image: mailhog/mailhog:latest
+    restart: unless-stopped
+    ports:
+      - "8025:8025"   # web UI -- open http://localhost:8025 to see forwarded mail
+      - "1025:1025"   # SMTP -- this is what Relayer sends to locally
+
+  relayer:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev   # lightweight python:3.12-alpine build, for fast local iteration only.
+                                    # Production uses ./Dockerfile (k8s-alpine-baseimage + s6).
+    restart: unless-stopped
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    environment:
+      DB_HOST: mariadb
+      DB_PORT: "3306"
+      DB_DATABASE: mail
+      DB_USER: relayer
+      DB_PASSWORD: relayerpass
+      POSTFIX_HOST: mailhog
+      POSTFIX_PORT: "1025"
+      ADMIN_USER: admin
+      ADMIN_PASS: admin
+      INGEST_TOKEN: local-dev-token
+      SECRET_KEY: local-dev-secret
+    ports:
+      - "8080:8080"   # web UI -- open http://localhost:8080
