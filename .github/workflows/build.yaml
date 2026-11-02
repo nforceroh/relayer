@@ -23,4 +23,5 @@ jobs:
       attestations: write
       id-token: write
     with:
+      setup-test-command: pip install -r requirements.txt
       test-command: python -m unittest discover -s tests -t . -v
