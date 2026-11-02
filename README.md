@@ -50,23 +50,27 @@ no Dovecot/Sieve edits, ever.
 
 ## Try it locally (docker-compose)
 
-No Kubernetes, no real mail server needed -- this spins up MariaDB
-(pre-seeded from `schema.sql` + `local/seed.sql`), Relayer itself (built
-from `Dockerfile.dev`, a lightweight `python:3.12-alpine` build meant only
-for fast local iteration -- **not** what runs in production, see below),
-and [MailHog](https://github.com/mailhog/MailHog) standing in for Postfix
-so you can actually see forwarded messages land, in a browser.
+Everything for local development lives in `dev/`: the Compose stack, a
+lightweight `python:3.12-alpine` Dockerfile (meant only for fast local
+iteration -- **not** what runs in production, see below), the seed data,
+and a sample message. The production `Dockerfile`, `schema.sql`, `k8s/`
+and `dovecot-side/` stay at the repository root.
+
+No Kubernetes, no real mail server needed -- the stack spins up MariaDB
+(pre-seeded from `schema.sql` + `dev/seed.sql`), Relayer itself, and
+[MailHog](https://github.com/mailhog/MailHog) standing in for Postfix so
+you can actually see forwarded messages land, in a browser.
 
 ```bash
-docker compose up --build
+docker compose -f dev/docker-compose.yml up --build
 ```
 
 Then:
 
 1. Open **http://localhost:8080** -- log in with `admin` / `admin` (set
-   in `docker-compose.yml`, change before using this anywhere real). You
-   should see `toyota@martintwingles.com` already seeded with two
-   recipients from `local/seed.sql`. The compact sidebar is the UI:
+   in `dev/docker-compose.yml`, change before using this anywhere real).
+   You should see `toyota@martintwingles.com` already seeded with two
+   recipients from `dev/seed.sql`. The compact sidebar is the UI:
    use **+ Add mailbox** to add a mailbox and its first recipient;
    toggles and remove buttons persist through the web UI.
 
@@ -76,7 +80,7 @@ Then:
    ```bash
    curl -s -X POST \
      -H "Authorization: Bearer local-dev-token" \
-     --data-binary @local/sample-message.eml \
+     --data-binary @dev/sample-message.eml \
      http://localhost:8080/ingest
    ```
 
@@ -91,8 +95,8 @@ Then:
    command above and check MailHog again to confirm it picked up the
    change immediately (no restart needed).
 
-`docker compose down -v` tears it all down, including the database
-volume, so you get a clean slate next time.
+`docker compose -f dev/docker-compose.yml down -v` tears it all down,
+including the database volume, so you get a clean slate next time.
 
 ## Production install (Kubernetes)
 
@@ -122,7 +126,7 @@ today -- Relayer never touches it.
 
 ### 2. Build and push the image
 
-Production builds from `Dockerfile` (not `Dockerfile.dev`, which is
+Production builds from `Dockerfile` (not `dev/Dockerfile.dev`, which is
 local-only) -- based on your shared `ghcr.io/nforceroh/k8s-alpine-baseimage:3.24`,
 same s6-overlay pattern as your Dovecot and ViMbAdmin images. It runs
 Gunicorn as an s6 longrun service (`content/etc/s6-overlay/s6-rc.d/relayer/`)

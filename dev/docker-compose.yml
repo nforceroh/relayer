@@ -2,6 +2,9 @@
 # Spins up: MariaDB (seeded with schema.sql), Relayer itself, and MailHog
 # as a stand-in SMTP server so you can see forwarded messages in a browser
 # instead of needing your real Postfix relay.
+#
+# Run from the repository root:
+#   docker compose -f dev/docker-compose.yml up --build
 
 services:
   mariadb:
@@ -14,8 +17,8 @@ services:
       MARIADB_PASSWORD: relayerpass
     volumes:
       # :Z gives MariaDB private SELinux access to these host files.
-      - ./schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro,Z
-      - ./local/seed.sql:/docker-entrypoint-initdb.d/02-seed.sql:ro,Z
+      - ../schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro,Z
+      - ./seed.sql:/docker-entrypoint-initdb.d/02-seed.sql:ro,Z
     ports:
       - "3306:3306"
     healthcheck:
@@ -33,9 +36,9 @@ services:
 
   relayer:
     build:
-      context: .
-      dockerfile: Dockerfile.dev   # lightweight python:3.12-alpine build, for fast local iteration only.
-                                    # Production uses ./Dockerfile (k8s-alpine-baseimage + s6).
+      context: ..                  # repository root
+      dockerfile: dev/Dockerfile.dev   # python:3.12-alpine, fast local iteration only.
+                                       # Production uses ./Dockerfile (k8s-alpine-baseimage + s6).
     restart: unless-stopped
     depends_on:
       mariadb:

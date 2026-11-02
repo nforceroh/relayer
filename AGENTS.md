@@ -2,10 +2,10 @@
 
 ## Project map
 
-- `app/main.py` exposes `create_app(settings, store)`: the Flask app is built from loaded settings and a recipient store; `wsgi.py` wires production, tests construct their own app with an `InMemoryRecipientStore`. `app/store.py` defines the recipient store interface with `app/db.py` as its MySQL adapter and `InMemoryRecipientStore` for tests; `app/mailbox_directory.py` groups rows into the mailbox view; `app/mailer.py` handles forwarding (transport is injectable: `process_raw_message(raw, recipients_lookup, send_message=None)`; tests pass a fake).
+- `app/main.py` exposes `create_app(settings, store)`: the Flask app is built from loaded settings and a recipient store; `wsgi.py` wires production, tests construct their own app with an `InMemoryRecipientStore`. `app/store.py` defines the recipient store interface with `app/db.py` as its MySQL adapter and `InMemoryRecipientStore` for tests; `app/mailbox_directory.py` groups rows into the mailbox view; `app/mailer.py` handles forwarding (transport is injectable: `process_raw_message(raw, recipients_lookup, send_message)`; the route wires the real SMTP transport, tests pass a fake).
 - The UI is server-rendered Jinja in `app/templates/` and uses Pico CSS. There is no frontend build system.
 - `forward_recipients` is the source of truth. Mailboxes are derived by grouping recipient rows; a mailbox starts existing when its first recipient is added.
-- `dovecot-side/` contains the production delivery hook. `k8s/` and `Dockerfile` describe production; `docker-compose.yml` and `Dockerfile.dev` are for local development.
+- `dovecot-side/` contains the production delivery hook. `k8s/`, `Dockerfile`, `schema.sql` and `content/` describe production and live at the repo root. Everything local-dev-only lives in `dev/` (`docker-compose.yml`, `Dockerfile.dev`, `seed.sql`, `sample-message.eml`) -- keep new developer-only tooling there too.
 
 ## Change conventions
 
@@ -20,8 +20,8 @@
 - The recipient store contract lives in `tests/store_contract.py` and runs against the in-memory adapter always. To check the MySQL adapter for drift, point it at a database (the local Compose stack works):
   `TEST_DB_HOST=127.0.0.1 TEST_DB_USER=relayer TEST_DB_PASSWORD=relayerpass TEST_DB_DATABASE=mail python -m unittest tests.test_store_mysql -v`
   The harness reads the DDL from `schema.sql`, and deletes every row in `forward_recipients` between tests, so only run it against a database you are willing to lose data from. All four variables are required; the tests skip and name any that are missing.
-- Run `docker compose config --quiet` after Compose changes; use the local stack for database integration as described in `README.md`.
-- MariaDB init scripts run only for a fresh data directory. After changing `schema.sql` or seed scripts, account for the existing volume; `docker compose down -v` deletes local database data and should only be used when a reset is intended.
+- Run `docker compose -f dev/docker-compose.yml config --quiet` after Compose changes; use the local stack for database integration as described in `README.md`.
+- MariaDB init scripts run only for a fresh data directory. After changing `schema.sql` or seed scripts, account for the existing volume; `docker compose -f dev/docker-compose.yml down -v` deletes local database data and should only be used when a reset is intended.
 
 ## Reports
 
