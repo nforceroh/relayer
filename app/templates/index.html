@@ -1,53 +1,26 @@
 {% extends "base.html" %}
+{% from "_macros.html" import mailbox_sidebar, mailbox_heading, recipient_entry, trash_icon with context %}
 {% block content %}
 
 <div class="prototype-shell variant-c">
-  <aside class="mailbox-sidebar">
-    <h2>Mailboxes <small data-mailbox-total>({{ grouped|length }})</small></h2>
-    <label>
-      <span class="sr-only">Filter mailboxes</span>
-      <input type="search" placeholder="Filter…" data-mailbox-search>
-    </label>
-    <details class="mailbox-create">
-      <summary>+ Add mailbox</summary>
-      <form method="post" action="{{ url_for('add_recipient') }}">
-        <label>Mailbox
-          <input type="email" name="mailbox" placeholder="new@example.com" required>
-        </label>
-        <label>First recipient
-          <input type="email" name="recipient" placeholder="someone@example.com" required>
-        </label>
-        <label>Label (optional)
-          <input type="text" name="label" placeholder="e.g. Personal">
-        </label>
-        <button type="submit">Create mailbox</button>
-      </form>
-    </details>
-    <nav class="mailbox-list" aria-label="Forwarding mailboxes">
-      {% for mailbox, rows in grouped.items() %}
-      <a class="mailbox-link"
-         href="{{ url_for('index', mailbox=mailbox) }}"
-         aria-current="{{ 'page' if mailbox == selected_mailbox else 'false' }}"
-         title="{{ mailbox }}"
-         data-mailbox-item data-mailbox="{{ mailbox }}" data-search-text="{{ mailbox|lower }}">
-        <span>{{ mailbox }}</span>
-        <small class="mailbox-count">{{ rows|length }} recipient{{ '' if rows|length == 1 else 's' }}</small>
-      </a>
-      {% endfor %}
-      {% if not grouped %}
-      <p data-no-mailboxes>No mailboxes yet.</p>
-      {% endif %}
-    </nav>
-  </aside>
+  {% call mailbox_sidebar() %}
+    <form method="post" action="{{ url_for('add_recipient') }}">
+      <label>Mailbox
+        <input type="email" name="mailbox" placeholder="new@example.com" required>
+      </label>
+      <label>First recipient
+        <input type="email" name="recipient" placeholder="someone@example.com" required>
+      </label>
+      <label>Label (optional)
+        <input type="text" name="label" placeholder="e.g. Personal">
+      </label>
+      <button type="submit">Create mailbox</button>
+    </form>
+  {% endcall %}
 
   <section class="prototype-main">
     {% if selected_mailbox %}
-      <header class="prototype-heading">
-        <div>
-          <h1>{{ selected_mailbox }}</h1>
-          <p>{{ selected_rows|length }} recipient{{ '' if selected_rows|length == 1 else 's' }} · {{ selected_rows|selectattr('enabled')|list|length }} active</p>
-        </div>
-      </header>
+      {{ mailbox_heading() }}
 
       <form class="add-recipient grid" method="post" action="{{ url_for('add_recipient') }}">
         <input type="hidden" name="mailbox" value="{{ selected_mailbox }}">
@@ -62,12 +35,7 @@
 
       <div class="recipient-list" aria-label="Recipients for {{ selected_mailbox }}" data-recipient-list {% if not selected_rows %}hidden{% endif %}>
         {% for row in selected_rows %}
-        <article class="recipient-entry" data-recipient-entry>
-          <div>
-            <div class="recipient-address">{{ row.recipient }}</div>
-          </div>
-          <div class="recipient-state">{{ 'Active' if row.enabled else 'Disabled' }}</div>
-          <div class="recipient-actions">
+          {% call recipient_entry(row) %}
             <form class="recipient-toggle" method="post" action="{{ url_for('toggle_recipient', row_id=row.id) }}" data-persistent-toggle>
               <input type="hidden" name="mailbox" value="{{ selected_mailbox }}">
               <input type="checkbox" role="switch" name="enabled" value="1"
@@ -79,13 +47,10 @@
                   onsubmit="return confirm('Remove {{ row.recipient }} from {{ selected_mailbox }}?');">
               <input type="hidden" name="mailbox" value="{{ selected_mailbox }}">
               <button type="submit" class="contrast outline icon-button" title="Remove recipient" aria-label="Remove {{ row.recipient }}">
-                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <path d="M2.5 4.5h11m-9.5 0 .6 9h6.8l.6-9M6 4.5V2.8h4v1.7m-3 2.2v4.7m2-4.7v4.7"/>
-                </svg>
+                {{ trash_icon() }}
               </button>
             </form>
-          </div>
-        </article>
+          {% endcall %}
         {% endfor %}
       </div>
       <p data-empty-recipient {% if selected_rows %}hidden{% endif %}>No recipients for this mailbox yet. Add one above.</p>

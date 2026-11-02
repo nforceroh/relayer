@@ -1,0 +1,58 @@
+{# Shared structure for the mailbox directory UI. Templates pass
+   their action controls as caller content. #}
+
+{% macro mailbox_sidebar() %}
+  <aside class="mailbox-sidebar">
+    <h2>Mailboxes <small data-mailbox-total>({{ grouped|length }})</small></h2>
+    <label>
+      <span class="sr-only">Filter mailboxes</span>
+      <input type="search" placeholder="Filter…" data-mailbox-search>
+    </label>
+    <details class="mailbox-create">
+      <summary>+ Add mailbox</summary>
+      {{ caller() }}
+    </details>
+    <nav class="mailbox-list" aria-label="Forwarding mailboxes">
+      {% for mailbox, rows in grouped.items() %}
+      <a class="mailbox-link"
+         href="{{ url_for('index', mailbox=mailbox) }}"
+         aria-current="{{ 'page' if mailbox == selected_mailbox else 'false' }}"
+         title="{{ mailbox }}"
+         data-mailbox-item data-mailbox="{{ mailbox }}" data-search-text="{{ mailbox|lower }}">
+        <span>{{ mailbox }}</span>
+        <small class="mailbox-count">{{ rows|length }} recipient{{ '' if rows|length == 1 else 's' }}</small>
+      </a>
+      {% endfor %}
+      {% if not grouped %}
+      <p data-no-mailboxes>No mailboxes yet.</p>
+      {% endif %}
+    </nav>
+  </aside>
+{% endmacro %}
+
+{% macro mailbox_heading() %}
+  <header class="prototype-heading">
+    <div>
+      <h1>{{ selected_mailbox }}</h1>
+      <p>{{ selected_rows|length }} recipient{{ '' if selected_rows|length == 1 else 's' }} · {{ selected_rows|selectattr('enabled')|list|length }} active</p>
+    </div>
+  </header>
+{% endmacro %}
+
+{% macro recipient_entry(row) %}
+  <article class="recipient-entry" data-recipient-entry>
+    <div>
+      <div class="recipient-address">{{ row.recipient }}</div>
+    </div>
+    <div class="recipient-state">{{ 'Active' if row.enabled else 'Disabled' }}</div>
+    <div class="recipient-actions">
+      {{ caller() }}
+    </div>
+  </article>
+{% endmacro %}
+
+{% macro trash_icon() %}
+  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M2.5 4.5h11m-9.5 0 .6 9h6.8l.6-9M6 4.5V2.8h4v1.7m-3 2.2v4.7m2-4.7v4.7"/>
+  </svg>
+{% endmacro %}
