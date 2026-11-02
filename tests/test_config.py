@@ -94,10 +94,7 @@ class FactoryWiringTests(unittest.TestCase):
     def test_mailer_transport_builds_callable_from_settings(self):
         from app import mailer
 
-        settings = config.Settings(
-            db_host="mariadb", db_port=3306, db_user="relayer", db_password="pw",
-            db_database="mail", ingest_token="tok", admin_user="admin",
-            admin_pass=None, secret_key="s", ui_prototype=False,
-            postfix_host="relay.internal", postfix_port=587, debug_smtp=False)
+        settings = config.Settings.for_tests(
+            postfix_host="relay.internal", postfix_port=587)
         transport = mailer.smtp_transport(settings)
         self.assertTrue(callable(transport))
