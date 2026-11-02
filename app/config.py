@@ -36,6 +36,7 @@ class Settings:
     postfix_host: str
     postfix_port: int
     debug_smtp: bool
+
     @classmethod
     def for_tests(cls, **overrides) -> "Settings":
         """A valid Settings instance for tests, with every field given a

@@ -85,11 +85,9 @@ class FactoryWiringTests(unittest.TestCase):
         from app.db import MySQLRecipientStore
         from app.store import store_from_env
 
-        settings = config.Settings(
-            db_host="db.internal", db_port=3307, db_user="relayer", db_password="pw",
-            db_database="maildb", ingest_token="tok", admin_user="admin",
-            admin_pass=None, secret_key="s", ui_prototype=False,
-            postfix_host="postfix", postfix_port=25, debug_smtp=False)
+        settings = config.Settings.for_tests(
+            db_host="db.internal", db_port=3307, db_user="relayer",
+            db_password="pw", db_database="maildb")
         store = store_from_env(settings)
         self.assertIsInstance(store, MySQLRecipientStore)
 
