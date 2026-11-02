@@ -52,18 +52,13 @@ def create_app(settings: Settings, store: RecipientStore) -> Flask:
     @requires_basic_auth
     def index():
         view = build_view(store.list_recipients(), request.args.get("mailbox"))
-        prototype_enabled = settings.ui_prototype
-        prototype_variant = request.args.get("variant", "a") if prototype_enabled else "c"
-        if prototype_enabled and prototype_variant not in {"a", "b", "c"}:
-            prototype_variant = "a"
-        template = "prototype.html" if prototype_enabled else "index.html"
+        template = "prototype.html" if settings.ui_prototype else "index.html"
         return render_template(
             template,
             grouped=view["grouped"],
             selected_mailbox=view["selected_mailbox"],
             selected_rows=view["selected_rows"],
-            prototype_enabled=prototype_enabled,
-            prototype_variant=prototype_variant,
+            prototype_enabled=settings.ui_prototype,
         )
 
     @app.route("/recipients", methods=["POST"])

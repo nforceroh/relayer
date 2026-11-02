@@ -88,7 +88,9 @@ class ProductionSidebarTests(unittest.TestCase):
         self.assertIn("data-prototype-add-mailbox", page)
         self.assertIn("data-prototype-toggle", page)
         self.assertIn("data-prototype-remove", page)
-        self.assertIn('aria-label="Prototype variations"', page)
+        # The prototype collapsed to variant C: no switcher, no variant plumbing.
+        self.assertNotIn("prototype-switcher", page)
+        self.assertNotIn("variant-b", page)
 
     def test_recipient_actions_keep_current_mailbox_selected(self):
         toggle_response = self.client.post(

@@ -148,14 +148,6 @@ html[data-theme="dark"] .prototype-note {
   border-radius: var(--pico-border-radius);
   background: var(--pico-card-background-color);
 }
-.add-recipient summary {
-  color: var(--pico-primary);
-  cursor: pointer;
-  font-weight: 600;
-}
-.add-recipient form {
-  margin-top: 1rem;
-}
 .add-recipient .grid {
   margin-bottom: 0;
 }
@@ -278,38 +270,14 @@ html[data-theme="dark"] .theme-moon {
     transition: none;
   }
 }
-.variant-b .mailbox-link {
-  display: block;
-}
-.variant-b .mailbox-count {
-  display: block;
-  margin-top: 0.2rem;
-}
-.variant-b .recipient-list {
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 0.75rem;
-}
-.variant-b .recipient-entry {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 0.75rem;
-  padding: 1rem;
-  border: 1px solid var(--pico-muted-border-color);
-  border-radius: var(--pico-border-radius);
-  background: var(--pico-card-background-color);
-}
-.variant-b .recipient-actions {
-  justify-content: flex-start;
-}
-.variant-c.prototype-shell {
+.prototype-shell {
   grid-template-columns: clamp(320px, 32vw, 440px) minmax(0, 1fr);
   gap: 0.75rem;
 }
-.variant-c {
+{
   font-size: 0.78rem;
 }
-.variant-c .mailbox-sidebar {
+.mailbox-sidebar {
   position: sticky;
   top: 0.5rem;
   min-width: 0;
@@ -317,23 +285,23 @@ html[data-theme="dark"] .theme-moon {
   padding: 0.5rem 0.65rem 0.5rem 0;
   border-right: 1px solid var(--pico-muted-border-color);
 }
-.variant-c .mailbox-sidebar h2,
-.variant-c .prototype-main h2 {
+.mailbox-sidebar h2,
+.prototype-main h2 {
   margin-bottom: 0.35rem;
   font-size: 0.85rem;
 }
-.variant-c .mailbox-create summary {
+.mailbox-create summary {
   font-size: 0.72rem;
 }
-.variant-c .mailbox-create form {
+.mailbox-create form {
   padding: 0.4rem;
 }
-.variant-c .mailbox-create input,
-.variant-c .mailbox-create button {
+.mailbox-create input,
+.mailbox-create button {
   min-height: 1.65rem;
   font-size: 0.68rem;
 }
-.variant-c .mailbox-sidebar input[type="search"] {
+.mailbox-sidebar input[type="search"] {
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
@@ -343,7 +311,7 @@ html[data-theme="dark"] .theme-moon {
   background-position: left 0.55rem center;
   font-size: 0.75rem;
 }
-.variant-c .mailbox-link {
+.mailbox-link {
   display: block;
   width: 100%;
   max-width: 100%;
@@ -353,7 +321,7 @@ html[data-theme="dark"] .theme-moon {
   border-color: transparent;
   font-size: 0.74rem;
 }
-.variant-c .mailbox-link > span {
+.mailbox-link > span {
   display: block;
   width: 100%;
   max-width: 100%;
@@ -361,29 +329,29 @@ html[data-theme="dark"] .theme-moon {
   overflow-wrap: anywhere;
   white-space: normal;
 }
-.variant-c .mailbox-count {
+.mailbox-count {
   display: block;
   max-width: 100%;
   margin-top: 0.1rem;
   overflow-wrap: anywhere;
   font-size: 0.66rem;
 }
-.variant-c .prototype-heading {
+.prototype-heading {
   gap: 0.3rem;
   margin-bottom: 0.45rem;
 }
-.variant-c .prototype-heading h1 {
+.prototype-heading h1 {
   margin-bottom: 0.1rem;
   font-size: 1.05rem;
 }
-.variant-c .prototype-heading p {
+.prototype-heading p {
   font-size: 0.7rem;
 }
-.variant-c .add-recipient {
+.add-recipient {
   margin-bottom: 0.45rem;
   padding: 0.45rem;
 }
-.variant-c .add-recipient.grid {
+.add-recipient.grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
   gap: 0.4rem;
@@ -393,12 +361,12 @@ html[data-theme="dark"] .theme-moon {
   min-width: 0;
   box-sizing: border-box;
 }
-.variant-c .add-recipient label {
+.add-recipient label {
   min-width: 0;
   margin-bottom: 0;
   font-size: 0.68rem;
 }
-.variant-c .add-recipient input {
+.add-recipient input {
   width: 100%;
   max-width: 100%;
   min-width: 0;
@@ -408,7 +376,7 @@ html[data-theme="dark"] .theme-moon {
   padding: 0.3rem 0.45rem;
   font-size: 0.74rem;
 }
-.variant-c .add-recipient button {
+.add-recipient button {
   width: auto;
   white-space: nowrap;
   min-height: 1.7rem;
@@ -416,27 +384,27 @@ html[data-theme="dark"] .theme-moon {
   padding: 0.3rem 0.55rem;
   font-size: 0.72rem;
 }
-.variant-c .recipient-entry {
+.recipient-entry {
   grid-template-columns: minmax(0, 1fr) minmax(3.5rem, 0.2fr) auto;
   gap: 0.4rem;
   padding: 0.32rem 0.2rem;
   font-size: 0.72rem;
 }
-.variant-c .recipient-address {
+.recipient-address {
   font-size: 0.74rem;
   font-weight: 500;
 }
-.variant-c .recipient-state {
+.recipient-state {
   font-size: 0.68rem;
 }
-.variant-c .recipient-actions {
+.recipient-actions {
   gap: 0.25rem;
 }
-.variant-c .recipient-actions button {
+.recipient-actions button {
   min-height: 1.55rem;
   padding: 0.2rem 0.35rem;
   font-size: 0.66rem;
 }
-.variant-c .recipient-label {
+.recipient-label {
   display: none;
 }

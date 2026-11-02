@@ -4,26 +4,13 @@
 <p class="prototype-note"><strong>UI prototype:</strong> add, disable, and remove controls are visual demos and do not save changes.</p>
 
 {% set selected_rows = grouped.get(selected_mailbox, []) %}
-{% set variant_names = {'a': 'A · Focus list', 'b': 'B · Recipient cards', 'c': 'C · Compact directory'} %}
-{% set previous_variants = {'a': 'c', 'b': 'a', 'c': 'b'} %}
-{% set next_variants = {'a': 'b', 'b': 'c', 'c': 'a'} %}
-<div class="prototype-shell variant-{{ prototype_variant }}">
+<div class="prototype-shell variant-c">
   <aside class="mailbox-sidebar">
-    {% if prototype_variant == 'a' %}
-      <h2>Mailboxes <small data-mailbox-total>({{ grouped|length }})</small></h2>
-      <label>
-        <span class="sr-only">Search mailboxes</span>
-        <input type="search" placeholder="Find a mailbox…" data-mailbox-search>
-      </label>
-    {% elif prototype_variant == 'b' %}
-      <h2>Mailboxes <small data-mailbox-total>({{ grouped|length }})</small></h2>
-    {% else %}
-      <h2>Mailboxes <small data-mailbox-total>({{ grouped|length }})</small></h2>
-      <label>
-        <span class="sr-only">Filter mailboxes</span>
-        <input type="search" placeholder="Filter…" data-mailbox-search>
-      </label>
-    {% endif %}
+    <h2>Mailboxes <small data-mailbox-total>({{ grouped|length }})</small></h2>
+    <label>
+      <span class="sr-only">Filter mailboxes</span>
+      <input type="search" placeholder="Filter…" data-mailbox-search>
+    </label>
     <details class="mailbox-create">
       <summary>+ Add mailbox</summary>
       <form data-prototype-add-mailbox>
@@ -42,7 +29,7 @@
     <nav class="mailbox-list" aria-label="Forwarding mailboxes">
       {% for mailbox, rows in grouped.items() %}
       <a class="mailbox-link"
-         href="{{ url_for('index', variant=prototype_variant, mailbox=mailbox) }}"
+         href="{{ url_for('index', mailbox=mailbox) }}"
          aria-current="{{ 'page' if mailbox == selected_mailbox else 'false' }}"
          title="{{ mailbox }}"
          data-mailbox-item data-mailbox="{{ mailbox }}" data-search-text="{{ mailbox|lower }}">
@@ -63,51 +50,23 @@
           <h1>{{ selected_mailbox }}</h1>
           <p>{{ selected_rows|length }} recipient{{ '' if selected_rows|length == 1 else 's' }} · {{ selected_rows|selectattr('enabled')|list|length }} active</p>
         </div>
-        {% if prototype_variant == 'a' %}
-          <button type="button" class="outline" data-open-add>+ Add recipient</button>
-        {% endif %}
       </header>
 
-      {% if prototype_variant == 'a' %}
-        <details class="add-recipient" id="add-recipient">
-          <summary data-add-recipient-summary>Add recipient to {{ selected_mailbox }}</summary>
-          <form data-prototype-add>
-            <label>Forward to
-              <input type="email" name="recipient" placeholder="someone@example.com" required>
-            </label>
-            <label>Label (optional)
-              <input type="text" name="label" placeholder="e.g. Sylvain">
-            </label>
-            <button type="submit">Add recipient</button>
-          </form>
-        </details>
-      {% elif prototype_variant == 'b' %}
-        <form class="add-recipient" data-prototype-add>
-          <label>Add another recipient to this mailbox
-            <input type="email" name="recipient" placeholder="someone@example.com" required>
-          </label>
-          <button type="submit">Add recipient</button>
-        </form>
-      {% else %}
-        <form class="add-recipient grid" data-prototype-add>
-          <label>Forward to
-            <input type="email" name="recipient" placeholder="Add an address…" required>
-          </label>
-          <label>Label (optional)
-            <input type="text" name="label" placeholder="Name">
-          </label>
-          <button type="submit">Add</button>
-        </form>
-      {% endif %}
+      <form class="add-recipient grid" data-prototype-add>
+        <label>Forward to
+          <input type="email" name="recipient" placeholder="Add an address…" required>
+        </label>
+        <label>Label (optional)
+          <input type="text" name="label" placeholder="Name">
+        </label>
+        <button type="submit">Add</button>
+      </form>
 
       <div class="recipient-list" aria-label="Recipients for {{ selected_mailbox }}" data-recipient-list {% if not selected_rows %}hidden{% endif %}>
         {% for row in selected_rows %}
         <article class="recipient-entry" data-recipient-entry>
           <div>
             <div class="recipient-address">{{ row.recipient }}</div>
-            {% if prototype_variant != 'c' %}
-              <div class="recipient-label">{{ row.label or 'No label' }}</div>
-            {% endif %}
           </div>
           <div class="recipient-state">{{ 'Active' if row.enabled else 'Disabled' }}</div>
           <div class="recipient-actions">
@@ -168,11 +127,6 @@
   </section>
 </div>
 
-<nav class="prototype-switcher" aria-label="Prototype variations">
-  <a href="{{ url_for('index', variant=previous_variants[prototype_variant], mailbox=selected_mailbox) }}" aria-label="Previous variation">←</a>
-  <span>{{ variant_names[prototype_variant] }}</span>
-  <a href="{{ url_for('index', variant=next_variants[prototype_variant], mailbox=selected_mailbox) }}" aria-label="Next variation">→</a>
-</nav>
 <div role="status" aria-live="polite" class="sr-only" data-prototype-status></div>
 
 <script>
@@ -220,8 +174,6 @@
 
     const main = document.querySelector(".prototype-main");
     main.querySelector(".prototype-heading h1").textContent = mailbox;
-    const addSummary = main.querySelector("[data-add-recipient-summary]");
-    if (addSummary) addSummary.textContent = `Add recipient to ${mailbox}`;
 
     if (!main.querySelector("[data-prototype-add]")) {
       const addForm = document.querySelector("#prototype-add-recipient-template").content.cloneNode(true);
@@ -331,13 +283,6 @@
     form.reset();
   });
 
-  document.querySelector("[data-open-add]")?.addEventListener("click", () => {
-    const form = document.querySelector("#add-recipient");
-    form.open = true;
-    form.scrollIntoView({ behavior: "smooth", block: "nearest" });
-    form.querySelector("input")?.focus();
-  });
-
   document.addEventListener("click", (event) => {
     const mailboxItem = event.target.closest("[data-mailbox-item]");
     if (mailboxItem?.dataset.prototypeCreated === "true") {
@@ -355,56 +300,11 @@
       status.textContent = `Prototype only: ${address} was removed from this preview, not from Relayer.`;
     }
   });
-
-  const variants = ["a", "b", "c"];
-  document.addEventListener("keydown", (event) => {
-    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
-    if (event.target.closest("input, textarea, select, [contenteditable='true']")) return;
-    const current = new URL(window.location.href);
-    const index = variants.indexOf(current.searchParams.get("variant") || "a");
-    const offset = event.key === "ArrowRight" ? 1 : -1;
-    current.searchParams.set("variant", variants[(index + offset + variants.length) % variants.length]);
-    window.location.href = current.toString();
-  });
 </script>
 
 <style>
-  .prototype-switcher {
-    position: fixed;
-    z-index: 10;
-    bottom: 1rem;
-    left: 50%;
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    padding: 0.55rem 0.75rem;
-    border: 1px solid #263746;
-    border-radius: 999px;
-    background: #263746;
-    color: white;
-    box-shadow: 0 4px 18px #0003;
-    transform: translateX(-50%);
-  }
-  .prototype-switcher a {
-    color: white;
-    text-decoration: none;
-  }
-  .prototype-switcher button {
-    width: 2rem;
-    margin: 0;
-    padding: 0.1rem;
-    border: 0;
-    background: transparent;
-    color: white;
-  }
-  .prototype-switcher span {
-    min-width: 10rem;
-    text-align: center;
-    font-size: 0.85rem;
-  }
   @media (max-width: 760px) {
-    .prototype-shell,
-    .variant-c.prototype-shell {
+    .prototype-shell {
       grid-template-columns: 1fr;
     }
     .mailbox-sidebar {
@@ -419,8 +319,7 @@
     .mailbox-link {
       min-width: 12rem;
     }
-    .recipient-entry,
-    .variant-c .recipient-entry {
+    .recipient-entry {
       grid-template-columns: minmax(0, 1fr) auto;
     }
     .recipient-state {
@@ -431,13 +330,13 @@
       grid-row: 1 / span 2;
       flex-direction: column;
     }
-    .variant-c .add-recipient.grid {
+    .add-recipient.grid {
       grid-template-columns: minmax(0, 1fr);
     }
-    .variant-c .add-recipient button {
+    .add-recipient button {
       justify-self: start;
     }
-    .variant-c .mailbox-sidebar {
+    .mailbox-sidebar {
       position: static;
       min-height: 0;
       padding: 0 0 0.5rem;
