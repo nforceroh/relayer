@@ -10,6 +10,7 @@ LABEL \
 org.label-schema.maintainer="Sylvain Martin (sylvain@nforcer.com)" \
 org.label-schema.build-date="${BUILD_DATE}" \
 org.label-schema.version="${VERSION}" \
+org.label-schema.vcs-ref="${VCS_REF}" \
 org.opencontainers.image.revision="${VCS_REF}" \
 org.opencontainers.image.base.digest="${BASE_DIGEST}" \
 org.opencontainers.image.base.name="ghcr.io/nforceroh/k8s-alpine-baseimage:3.24" \
