@@ -1,5 +1,3 @@
-version: "3.8"
-
 # Local dev/test stack -- NOT the production topology.
 # Spins up: MariaDB (seeded with schema.sql), Relayer itself, and MailHog
 # as a stand-in SMTP server so you can see forwarded messages in a browser
@@ -15,8 +13,9 @@ services:
       MARIADB_USER: relayer
       MARIADB_PASSWORD: relayerpass
     volumes:
-      - ./schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
-      - ./local/seed.sql:/docker-entrypoint-initdb.d/02-seed.sql:ro
+      # :Z gives MariaDB private SELinux access to these host files.
+      - ./schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro,Z
+      - ./local/seed.sql:/docker-entrypoint-initdb.d/02-seed.sql:ro,Z
     ports:
       - "3306:3306"
     healthcheck:
@@ -53,5 +52,6 @@ services:
       ADMIN_PASS: admin
       INGEST_TOKEN: local-dev-token
       SECRET_KEY: local-dev-secret
+      UI_PROTOTYPE: "${UI_PROTOTYPE:-0}"
     ports:
       - "8080:8080"   # web UI -- open http://localhost:8080
