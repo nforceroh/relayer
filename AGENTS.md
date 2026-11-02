@@ -19,7 +19,7 @@
 - Run `python -m unittest discover -s tests -v` for all tests; `python -m unittest tests.test_mailer -v` covers the forward pipeline and composition.
 - The recipient store contract lives in `tests/store_contract.py` and runs against the in-memory adapter always. To check the MySQL adapter for drift, point it at a database (the local Compose stack works):
   `TEST_DB_HOST=127.0.0.1 TEST_DB_USER=relayer TEST_DB_PASSWORD=relayerpass TEST_DB_DATABASE=mail python -m unittest tests.test_store_mysql -v`
-  These tests truncate `forward_recipients`, so only run them against a database you are willing to lose data from.
+  The harness reads the DDL from `schema.sql`, and deletes every row in `forward_recipients` between tests, so only run it against a database you are willing to lose data from. All four variables are required; the tests skip and name any that are missing.
 - Run `docker compose config --quiet` after Compose changes; use the local stack for database integration as described in `README.md`.
 - MariaDB init scripts run only for a fresh data directory. After changing `schema.sql` or seed scripts, account for the existing volume; `docker compose down -v` deletes local database data and should only be used when a reset is intended.
 
