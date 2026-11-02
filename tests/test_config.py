@@ -36,7 +36,6 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(settings.admin_user, "admin")
         self.assertIsNone(settings.admin_pass)
         self.assertEqual(settings.secret_key, "change-me-in-production")
-        self.assertFalse(settings.ui_prototype)
         self.assertFalse(settings.debug_smtp)
 
     def test_values_read_from_env(self):
@@ -53,7 +52,6 @@ class ConfigTests(unittest.TestCase):
             "POSTFIX_HOST": "relay.internal",
             "POSTFIX_PORT": "587",
             "LOG_LEVEL": "DEBUG",
-            "UI_PROTOTYPE": "1",
         }
         with mock.patch.dict(config.os.environ, env, clear=True):
             settings = config.load()
@@ -66,7 +64,6 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(settings.admin_user, "boss")
         self.assertEqual(settings.admin_pass, "secret")
         self.assertEqual(settings.secret_key, "real-secret")
-        self.assertTrue(settings.ui_prototype)
         self.assertTrue(settings.debug_smtp)
 
     def test_invalid_db_port_raises_at_startup(self):

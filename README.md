@@ -66,11 +66,9 @@ Then:
 1. Open **http://localhost:8080** -- log in with `admin` / `admin` (set
    in `docker-compose.yml`, change before using this anywhere real). You
    should see `toyota@martintwingles.com` already seeded with two
-   recipients from `local/seed.sql`. The compact sidebar is the persistent
-   UI: use **+ Add mailbox** to add a mailbox and its first recipient.
-   To compare the three preview layouts, restart with
-   `UI_PROTOTYPE=1 docker compose up --build`; prototype add, disable, and
-   remove actions are in-memory only and do not update the database.
+   recipients from `local/seed.sql`. The compact sidebar is the UI:
+   use **+ Add mailbox** to add a mailbox and its first recipient;
+   toggles and remove buttons persist through the web UI.
 
 2. Simulate an inbound message hitting `/ingest` (this is exactly what
    the Dovecot pipe script does in production):

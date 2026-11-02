@@ -52,6 +52,5 @@ services:
       ADMIN_PASS: admin
       INGEST_TOKEN: local-dev-token
       SECRET_KEY: local-dev-secret
-      UI_PROTOTYPE: "${UI_PROTOTYPE:-0}"
     ports:
       - "8080:8080"   # web UI -- open http://localhost:8080

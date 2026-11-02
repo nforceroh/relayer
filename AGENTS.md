@@ -10,7 +10,7 @@
 ## Change conventions
 
 - Follow the existing Flask, Jinja, and parameterized PyMySQL patterns. Normalize mailbox and recipient addresses consistently with the store adapters in `app/store.py` and `app/db.py`. Use the domain terms in `GLOSSARY.md` (forward, mailbox, recipient) in code and conversation.
-- Keep local-only UI experiments in `app/templates/prototype.html` behind `UI_PROTOTYPE`. Prototype controls are in-memory previews and must not be presented as persisted changes; `app/templates/index.html` is production-only.
+- Keep the UI server-rendered in `app/templates/index.html`; shared structure lives in `app/templates/_macros.html`. There is no prototype mode.
 - Preserve the documented fail-open behavior of inbound delivery and forwarding. See `README.md` for architecture and operational details.
 - Keep Python dependencies pinned in `requirements.txt`; avoid adding frontend tooling for server-rendered UI changes.
 

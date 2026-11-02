@@ -76,22 +76,6 @@ class ProductionSidebarTests(unittest.TestCase):
             }],
         )
 
-    def test_prototype_mode_keeps_preview_only_controls(self):
-        app = create_app(make_settings(ui_prototype=True), self.store)
-        client = app.test_client()
-
-        response = client.get("/", auth=self.auth)
-
-        page = response.get_data(as_text=True)
-        self.assertEqual(response.status_code, 200)
-        self.assertIn("UI prototype:", page)
-        self.assertIn("data-prototype-add-mailbox", page)
-        self.assertIn("data-prototype-toggle", page)
-        self.assertIn("data-prototype-remove", page)
-        # The prototype collapsed to variant C: no switcher, no variant plumbing.
-        self.assertNotIn("prototype-switcher", page)
-        self.assertNotIn("variant-b", page)
-
     def test_recipient_actions_keep_current_mailbox_selected(self):
         toggle_response = self.client.post(
             "/recipients/1/toggle",

@@ -31,7 +31,6 @@ class Settings:
     admin_user: str
     admin_pass: str | None
     secret_key: str
-    ui_prototype: bool
     # Outbound mail
     postfix_host: str
     postfix_port: int
@@ -51,8 +50,7 @@ class Settings:
             admin_user="admin",
             admin_pass="test-password",
             secret_key="test-secret",
-            ui_prototype=False,
-            postfix_host="postfix",
+                postfix_host="postfix",
             postfix_port=25,
             debug_smtp=False,
         )
@@ -86,7 +84,6 @@ def load() -> Settings:
         admin_user=os.environ.get("ADMIN_USER", "admin"),
         admin_pass=os.environ.get("ADMIN_PASS") or None,
         secret_key=os.environ.get("SECRET_KEY", "change-me-in-production"),
-        ui_prototype=os.environ.get("UI_PROTOTYPE") == "1",
         postfix_host=os.environ.get("POSTFIX_HOST", "postfix"),
         postfix_port=_int("POSTFIX_PORT", "25"),
         debug_smtp=os.environ.get("LOG_LEVEL", "INFO").upper() == "DEBUG",
