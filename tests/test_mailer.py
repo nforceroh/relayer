@@ -263,3 +263,64 @@ class ExtractionTests(unittest.TestCase):
 
     def test_html_to_text_of_empty_string_is_empty(self):
         self.assertEqual(mailer._html_to_text(""), "")
+
+
+class HtmlForwardTests(unittest.TestCase):
+    """The HTML branch of build_forward: the path most real mail takes."""
+
+    def html_original(self, body: str = "<p>Hello <b>world</b></p>") -> EmailMessage:
+        original = EmailMessage()
+        original["From"] = 'Sender Name <sender@example.net>'
+        original["Subject"] = "Weekly update"
+        original.set_content(body, subtype="html")
+        return original
+
+    def test_html_forward_has_both_plain_and_html_parts(self):
+        forward = mailer.build_forward(
+            "toyota@example.com", self.html_original(), "a@example.net")
+
+        parts = {part.get_content_type() for part in forward.walk()}
+        self.assertIn("text/plain", parts)
+        self.assertIn("text/html", parts)
+        self.assertIn("multipart/alternative", parts)
+
+    def test_html_forward_escapes_sender_and_mailbox_in_preamble(self):
+        original = self.html_original()
+        original.replace_header("From", 'Evil <script>alert(1)</script> <x@y.z>')
+
+        forward = mailer.build_forward(
+            "toyota@example.com", original, "a@example.net")
+
+        html_part = next(part for part in forward.walk()
+                         if part.get_content_type() == "text/html")
+        html_body = html_part.get_content()
+        # The raw <script> must not appear in the HTML preamble; it is
+        # escaped so it renders as text, never executes.
+        self.assertNotIn("<script>", html_body)
+        self.assertIn("&lt;script&gt;", html_body)
+
+    def test_html_forward_derives_plain_fallback_from_html(self):
+        original = self.html_original("<p>Hello <b>world</b></p>")
+
+        forward = mailer.build_forward(
+            "toyota@example.com", original, "a@example.net")
+
+        plain_part = next(part for part in forward.walk()
+                          if part.get_content_type() == "text/plain")
+        plain_body = plain_part.get_content()
+        self.assertIn("Hello world", plain_body)
+        self.assertIn("Forwarded message, originally from:", plain_body)
+
+    def test_html_forward_keeps_original_plain_when_present(self):
+        original = EmailMessage()
+        original["From"] = "sender@example.net"
+        original["Subject"] = "Both parts"
+        original.set_content("Plain truth.")
+        original.add_alternative("<p>Html truth.</p>", subtype="html")
+
+        forward = mailer.build_forward(
+            "toyota@example.com", original, "a@example.net")
+
+        plain_part = next(part for part in forward.walk()
+                          if part.get_content_type() == "text/plain")
+        self.assertIn("Plain truth.", plain_part.get_content())
