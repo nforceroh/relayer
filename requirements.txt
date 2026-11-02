@@ -1,3 +1,16 @@
+# Direct dependencies.
 Flask==3.0.3
 PyMySQL==1.1.1
 gunicorn==22.0.0
+
+# Transitive dependencies, pinned so a rebuild resolves to the same set.
+# Without these, `pip install -r requirements.txt` floats them to whatever
+# is newest at build time, and the image changes with no commit to show it.
+# Bump alongside the direct dependency that requires them.
+blinker==1.9.0        # Flask
+click==8.5.0          # Flask
+itsdangerous==2.2.0   # Flask
+Jinja2==3.1.6         # Flask
+MarkupSafe==3.0.4     # Jinja2, Werkzeug
+Werkzeug==3.1.9       # Flask
+packaging==26.3       # gunicorn
