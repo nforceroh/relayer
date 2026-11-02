@@ -16,7 +16,7 @@
 
 ## Validation
 
-- Run `python -m unittest discover -s tests -v` for Flask route/template changes; `python -m unittest tests.test_mailer -v` covers the forward pipeline and composition.
+- Run `python -m unittest discover -s tests -t . -v` for all tests; `python -m unittest tests.test_mailer -v` covers the forward pipeline and composition.
 - Run `docker compose config --quiet` after Compose changes; use the local stack for database integration as described in `README.md`.
 - MariaDB init scripts run only for a fresh data directory. After changing `schema.sql` or seed scripts, account for the existing volume; `docker compose down -v` deletes local database data and should only be used when a reset is intended.
 
