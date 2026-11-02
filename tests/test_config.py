@@ -81,14 +81,25 @@ if __name__ == "__main__":
 
 
 class FactoryWiringTests(unittest.TestCase):
-    def test_store_factory_requires_settings(self):
+    def test_store_factory_builds_mysql_adapter_from_settings(self):
+        from app.db import MySQLRecipientStore
         from app.store import store_from_env
-        with mock.patch.dict(config.os.environ, {"DB_USER": "relayer"}, clear=True):
-            with self.assertRaises(TypeError):
-                store_from_env()
 
-    def test_mailer_factory_requires_settings(self):
+        settings = config.Settings(
+            db_host="db.internal", db_port=3307, db_user="relayer", db_password="pw",
+            db_database="maildb", ingest_token="tok", admin_user="admin",
+            admin_pass=None, secret_key="s", ui_prototype=False,
+            postfix_host="postfix", postfix_port=25, debug_smtp=False)
+        store = store_from_env(settings)
+        self.assertIsInstance(store, MySQLRecipientStore)
+
+    def test_mailer_transport_builds_callable_from_settings(self):
         from app import mailer
-        with mock.patch.dict(config.os.environ, {"LOG_LEVEL": "INFO"}, clear=True):
-            with self.assertRaises(TypeError):
-                mailer.smtp_send_message_from_env()
+
+        settings = config.Settings(
+            db_host="mariadb", db_port=3306, db_user="relayer", db_password="pw",
+            db_database="mail", ingest_token="tok", admin_user="admin",
+            admin_pass=None, secret_key="s", ui_prototype=False,
+            postfix_host="relay.internal", postfix_port=587, debug_smtp=False)
+        transport = mailer.smtp_transport(settings)
+        self.assertTrue(callable(transport))

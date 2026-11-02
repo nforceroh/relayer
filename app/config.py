@@ -36,6 +36,27 @@ class Settings:
     postfix_host: str
     postfix_port: int
     debug_smtp: bool
+    @classmethod
+    def for_tests(cls, **overrides) -> "Settings":
+        """A valid Settings instance for tests, with every field given a
+        benign value. Overrides replace individual fields."""
+        defaults = dict(
+            db_host="mariadb",
+            db_port=3306,
+            db_user="test-relayer",
+            db_password="test-password",
+            db_database="mail",
+            ingest_token="test-ingest-token",
+            admin_user="admin",
+            admin_pass="test-password",
+            secret_key="test-secret",
+            ui_prototype=False,
+            postfix_host="postfix",
+            postfix_port=25,
+            debug_smtp=False,
+        )
+        defaults.update(overrides)
+        return cls(**defaults)
 
 
 def _require(name: str) -> str:

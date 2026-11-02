@@ -25,6 +25,10 @@ def create_app(settings: Settings, store: RecipientStore) -> Flask:
     app = Flask(__name__)
     app.secret_key = settings.secret_key
 
+    # The outbound transport is built once, here, where settings live;
+    # the ingest route hands it to the pipeline explicitly.
+    send_message = mailer.smtp_transport(settings)
+
     # ---- auth -------------------------------------------------------------
 
     def requires_basic_auth(f):
@@ -135,7 +139,7 @@ def create_app(settings: Settings, store: RecipientStore) -> Flask:
         raw = request.get_data()
         log.debug("ingest accepted: remote=%s bytes=%d", request.remote_addr, len(raw))
 
-        result = mailer.process_raw_message(raw, store.get_active_recipients)
+        result = mailer.process_raw_message(raw, store.get_active_recipients, send_message)
         log.info("ingest result: %s", result)
         return result, 200
 

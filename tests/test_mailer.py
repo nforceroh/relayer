@@ -156,3 +156,32 @@ class CompositionTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class RouteWiringTests(unittest.TestCase):
+    def test_ingest_route_passes_a_transport_to_the_pipeline(self):
+        # Regression: the config refactor left process_raw_message's
+        # default transport calling the factory with no settings, which
+        # 500'd every production ingest. The route must wire the
+        # transport explicitly.
+        from unittest import mock
+
+        from app.config import Settings
+        from app.main import create_app
+        from app.store import InMemoryRecipientStore
+
+        settings = Settings.for_tests()
+        store = InMemoryRecipientStore([
+            {"id": 1, "mailbox": "toyota@example.com", "recipient": "a@example.net",
+             "label": None, "enabled": 1, "created_at": "2026-11-02 12:00:00"}])
+        with mock.patch.object(mailer, "smtp_transport") as factory:
+            factory.return_value = lambda msg: None
+            app = create_app(settings, store)
+            client = app.test_client()
+            response = client.post(
+                "/ingest", headers={"Authorization": "Bearer test-ingest-token"},
+                data=b"From: x@y\nDelivered-To: toyota@example.com\nSubject: hi\n\nbody")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["status"], "ok")
+        factory.assert_called_once_with(settings)

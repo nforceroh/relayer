@@ -6,23 +6,7 @@ from app.store import InMemoryRecipientStore
 
 
 def make_settings(**overrides):
-    base = dict(
-        db_host="mariadb",
-        db_port=3306,
-        db_user="relayer",
-        db_password="pw",
-        db_database="mail",
-        ingest_token="test-ingest-token",
-        admin_user="admin",
-        admin_pass="test-password",
-        secret_key="test-secret",
-        ui_prototype=False,
-        postfix_host="postfix",
-        postfix_port=25,
-        debug_smtp=False,
-    )
-    base.update(overrides)
-    return Settings(**base)
+    return Settings.for_tests(**overrides)
 
 
 def seed_store(*rows):

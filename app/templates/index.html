@@ -1,8 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
 
-
-{% set selected_rows = grouped.get(selected_mailbox, []) %}
 <div class="prototype-shell variant-c">
   <aside class="mailbox-sidebar">
     <h2>Mailboxes <small data-mailbox-total>({{ grouped|length }})</small></h2>

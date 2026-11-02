@@ -118,11 +118,10 @@ def build_forward(mailbox: str, original: email.message.Message, recipient: str)
     return msg
 
 
-def smtp_send_message_from_env(settings) -> "callable[[EmailMessage], None]":
+def smtp_transport(settings) -> "callable[[EmailMessage], None]":
     """Builds the real SMTP transport from loaded settings.
 
-    Reads configuration at call time (not import time) so tests never
-    construct the real transport.
+    Called once at app creation; tests never construct it.
     """
     debug_smtp = settings.debug_smtp
     host = settings.postfix_host
@@ -151,17 +150,15 @@ def smtp_send_message_from_env(settings) -> "callable[[EmailMessage], None]":
     return send_message
 
 
-def process_raw_message(raw: bytes, recipients_lookup, send_message=None) -> dict:
+def process_raw_message(raw: bytes, recipients_lookup, send_message) -> dict:
     """Parses raw bytes, looks up recipients (via the passed-in callable),
     sends forwards through the given transport, and returns a small
     summary dict for logging/response.
 
     send_message is the transport seam: a callable taking the composed
-    EmailMessage. When omitted, the real SMTP transport is built from
-    environment configuration; tests pass a fake instead.
+    EmailMessage. The caller wires it — the real SMTP transport in
+    production, a fake in tests.
     """
-    if send_message is None:
-        send_message = smtp_send_message_from_env()
     try:
         original = email.message_from_bytes(raw, policy=email.policy.default)
     except Exception:
