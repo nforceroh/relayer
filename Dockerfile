@@ -1,4 +1,4 @@
-FROM ghcr.io/nforceroh/k8s-alpine-baseimage:3.24
+FROM ghcr.io/nforceroh/alpine-base:3.24
 
 ARG \
 BUILD_DATE=unknown \
@@ -13,7 +13,7 @@ org.label-schema.version="${VERSION}" \
 org.label-schema.vcs-ref="${VCS_REF}" \
 org.opencontainers.image.revision="${VCS_REF}" \
 org.opencontainers.image.base.digest="${BASE_DIGEST}" \
-org.opencontainers.image.base.name="ghcr.io/nforceroh/k8s-alpine-baseimage:3.24" \
+org.opencontainers.image.base.name="ghcr.io/nforceroh/alpine-base:3.24" \
 org.label-schema.vcs-url="https://github.com/nforceroh/relayer" \
 org.label-schema.schema-version="1.0"
 

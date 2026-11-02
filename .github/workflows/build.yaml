@@ -1,0 +1,26 @@
+# managed by nforceroh/.github/.github/workflows/image-build.yaml@v1
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  schedule:
+    - cron: "0 4 * * 0"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  image:
+    uses: nforceroh/.github/.github/workflows/image-build.yaml@v1
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
+    with:
+      test-command: python -m unittest discover -s tests -t . -v

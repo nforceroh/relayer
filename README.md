@@ -127,7 +127,7 @@ today -- Relayer never touches it.
 ### 2. Build and push the image
 
 Production builds from `Dockerfile` (not `dev/Dockerfile.dev`, which is
-local-only) -- based on your shared `ghcr.io/nforceroh/k8s-alpine-baseimage:3.24`,
+local-only) -- based on your shared `ghcr.io/nforceroh/alpine-base:3.24`,
 same s6-overlay pattern as your Dovecot and ViMbAdmin images. It runs
 Gunicorn as an s6 longrun service (`content/etc/s6-overlay/s6-rc.d/relayer/`)
 under a dedicated `relayer` user, rather than a Docker `CMD` -- matching
