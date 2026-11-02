@@ -12,11 +12,6 @@ from email.message import EmailMessage
 
 log = logging.getLogger("relayer.mailer")
 
-DEBUG_SMTP = os.environ.get("LOG_LEVEL", "INFO").upper() == "DEBUG"
-
-POSTFIX_HOST = os.environ.get("POSTFIX_HOST", "postfix")
-POSTFIX_PORT = int(os.environ.get("POSTFIX_PORT", "25"))
-
 CODE_PATTERN = re.compile(r"\b(\d{4,8})\b")
 TAG_PATTERN = re.compile(r"<[^>]+>")
 WHITESPACE_PATTERN = re.compile(r"[ \t]*\n[ \t]*")
@@ -124,30 +119,56 @@ def build_forward(mailbox: str, original: email.message.Message, recipient: str)
     return msg
 
 
-def send(msg: EmailMessage) -> None:
-    log.debug(
-        "smtp connect: host=%s port=%s from=%s to=%s subject=%r",
-        POSTFIX_HOST, POSTFIX_PORT, msg["From"], msg["To"], msg["Subject"],
-    )
-    with smtplib.SMTP(POSTFIX_HOST, POSTFIX_PORT, timeout=10) as smtp:
-        if DEBUG_SMTP:
-            # Prints the raw SMTP conversation (EHLO/MAIL FROM/RCPT TO/DATA
-            # and the server's responses) to stderr, which shows up
-            # alongside the rest of the container's logs.
-            smtp.set_debuglevel(1)
-        refused = smtp.send_message(msg)
-        if refused:
-            # send_message only raises if ALL recipients are refused; a
-            # partial refusal (rare here, single-recipient sends) returns
-            # a dict instead and would otherwise pass silently.
-            log.warning("smtp partial refusal: %s", refused)
-        else:
-            log.debug("smtp accepted: to=%s", msg["To"])
+def smtp_send_message_from_env(settings=None) -> "callable[[EmailMessage], None]":
+    """Builds the real SMTP transport from loaded settings (or from the
+    environment directly when settings are not supplied).
+
+    Reads configuration at call time (not import time) so tests never
+    construct the real transport.
+    """
+    if settings is None:
+        debug_smtp = os.environ.get("LOG_LEVEL", "INFO").upper() == "DEBUG"
+        host = os.environ.get("POSTFIX_HOST", "postfix")
+        port = int(os.environ.get("POSTFIX_PORT", "25"))
+    else:
+        debug_smtp = settings.debug_smtp
+        host = settings.postfix_host
+        port = settings.postfix_port
+
+    def send_message(msg: EmailMessage) -> None:
+        log.debug(
+            "smtp connect: host=%s port=%s from=%s to=%s subject=%r",
+            host, port, msg["From"], msg["To"], msg["Subject"],
+        )
+        with smtplib.SMTP(host, port, timeout=10) as smtp:
+            if debug_smtp:
+                # Prints the raw SMTP conversation (EHLO/MAIL FROM/RCPT TO/DATA
+                # and the server's responses) to stderr, which shows up
+                # alongside the rest of the container's logs.
+                smtp.set_debuglevel(1)
+            refused = smtp.send_message(msg)
+            if refused:
+                # send_message only raises if ALL recipients are refused; a
+                # partial refusal (rare here, single-recipient sends) returns
+                # a dict instead and would otherwise pass silently.
+                log.warning("smtp partial refusal: %s", refused)
+            else:
+                log.debug("smtp accepted: to=%s", msg["To"])
+
+    return send_message
 
 
-def process_raw_message(raw: bytes, recipients_lookup) -> dict:
+def process_raw_message(raw: bytes, recipients_lookup, send_message=None) -> dict:
     """Parses raw bytes, looks up recipients (via the passed-in callable),
-    sends forwards, and returns a small summary dict for logging/response."""
+    sends forwards through the given transport, and returns a small
+    summary dict for logging/response.
+
+    send_message is the transport seam: a callable taking the composed
+    EmailMessage. When omitted, the real SMTP transport is built from
+    environment configuration; tests pass a fake instead.
+    """
+    if send_message is None:
+        send_message = smtp_send_message_from_env()
     try:
         original = email.message_from_bytes(raw, policy=email.policy.default)
     except Exception:
@@ -176,7 +197,7 @@ def process_raw_message(raw: bytes, recipients_lookup) -> dict:
     sent, failed = [], []
     for recipient in recipients:
         try:
-            send(build_forward(mailbox, original, recipient))
+            send_message(build_forward(mailbox, original, recipient))
             sent.append(recipient)
         except Exception:
             log.exception("failed to forward %s -> %s", mailbox, recipient)
