@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Architecture review for relayer</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script type="module">
+  import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+  mermaid.initialize({ startOnLoad: true, theme: "neutral", securityLevel: "loose" });
+</script>
+<style>
+  .seam { stroke-dasharray: 4 4; }
+  .deep { background: linear-gradient(135deg, #0f172a, #1e293b); }
+</style>
+</head>
+<body class="bg-stone-50 text-slate-900 font-sans">
+<main class="max-w-5xl mx-auto px-6 py-12 space-y-12">
+
+<header class="space-y-3">
+  <h1 class="font-serif text-3xl">Architecture review — <span class="font-mono text-2xl">relayer</span></h1>
+  <p class="text-sm text-slate-500">2026-11-02 · post-refactor pass (follows the mailbox-directory / store-seam / template-split round)</p>
+  <div class="flex gap-6 text-xs text-slate-600 pt-2 border-t border-stone-200">
+    <span><span class="inline-block w-3 h-3 border border-slate-400 align-middle"></span> module</span>
+    <span><span class="inline-block w-6 border-t-2 border-dashed border-slate-400 align-middle"></span> seam</span>
+    <span><span class="inline-block w-6 border-t-2 border-red-600 align-middle"></span> leakage</span>
+    <span><span class="inline-block w-3 h-3 deep align-middle"></span> deep module</span>
+  </div>
+</header>
+
+<section id="candidates" class="space-y-10">
+
+<!-- Candidate 1 -->
+<article id="c1" class="rounded-xl border border-stone-200 bg-white p-6 space-y-4 shadow-sm">
+  <div class="flex items-center gap-3">
+    <h2 class="font-serif text-xl">1 · Deepen the forward-composition module</h2>
+    <span class="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-xs font-semibold">Strong</span>
+    <span class="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 text-xs">in-process</span>
+  </div>
+  <p class="font-mono text-sm text-slate-600">app/mailer.py · (no tests exist for any of it)</p>
+
+  <div class="grid grid-cols-2 gap-4">
+    <div class="rounded-lg border border-slate-200 bg-white p-4">
+      <p class="text-xs uppercase tracking-wider text-slate-500 mb-2">Before — config read at import, SMTP welded in</p>
+      <pre class="mermaid">
+flowchart TD
+  ENV[module-level env reads<br/>POSTFIX_HOST / PORT / DEBUG] -.frozen at import.-> S[send]
+  S -->|"smtplib.SMTP(...)"| NET[(network)]
+  P[process_raw_message] --> B[build_forward]
+  B -.->|pure, testable| P
+  S -.untestable without a live SMTP.-> P
+  classDef leak stroke:#dc2626,stroke-width:2px;
+  class S,ENV leak
+      </pre>
+    </div>
+    <div class="rounded-lg border border-slate-200 bg-white p-4">
+      <p class="text-xs uppercase tracking-wider text-slate-500 mb-2">After — one deep interface, injected transport</p>
+      <div class="relative h-64">
+        <div class="absolute inset-x-6 top-4 h-10 rounded border-2 border-slate-700 flex items-center justify-center text-xs uppercase tracking-wider bg-white">forwarder.process(raw, recipients) → summary</div>
+        <svg class="absolute inset-0 w-full h-full"><line x1="50%" y1="56" x2="50%" y2="90" stroke="#334155" stroke-width="2"/></svg>
+        <div class="deep absolute inset-x-6 top-24 bottom-4 rounded text-white p-4 text-xs space-y-1">
+          <p class="uppercase tracking-wider text-slate-300">implementation (hidden)</p>
+          <p class="text-slate-400">parse · mailbox resolution · code extraction · forward composition · per-recipient send loop</p>
+          <p class="text-slate-500">transport is a parameter: real SMTP in prod, fake in tests</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <p class="text-sm"><strong>Problem:</strong> the forward-composition module is the codebase's real logic — parsing, mailbox resolution, code extraction, message composition — yet it has zero tests, because <span class="font-mono text-xs">send()</span> welds <span class="font-mono text-xs">smtplib</span> and import-time env reads into the same module as the pure composition code.</p>
+  <p class="text-sm"><strong>Solution:</strong> accept the transport as a parameter instead of creating it; move env reads out of module import into the composition entry point. The pure functions already exist — the seam just needs to reach the send loop.</p>
+  <ul class="text-sm list-disc pl-5 space-y-1">
+    <li>locality: forwarding bugs concentrate in one module</li>
+    <li>leverage: one interface, every forwarding behaviour testable</li>
+    <li>two transports = real seam, not hypothetical</li>
+    <li>tests stop needing MailHog or network</li>
+  </ul>
+</article>
+
+<!-- Candidate 2 -->
+<article id="c2" class="rounded-xl border border-stone-200 bg-white p-6 space-y-4 shadow-sm">
+  <div class="flex items-center gap-3">
+    <h2 class="font-serif text-xl">2 · One configuration module</h2>
+    <span class="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-xs font-semibold">Worth exploring</span>
+    <span class="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 text-xs">in-process</span>
+  </div>
+  <p class="font-mono text-sm text-slate-600">app/main.py (6 reads) · app/mailer.py (3) · app/store.py (5)</p>
+
+  <div class="grid grid-cols-2 gap-4">
+    <div class="rounded-lg border border-slate-200 bg-white p-4">
+      <p class="text-xs uppercase tracking-wider text-slate-500 mb-2">Before — env scattered, some frozen at import</p>
+      <div class="space-y-1 text-xs font-mono">
+        <div class="h-8 rounded border-l-4 border-red-500 bg-stone-100 flex items-center px-2">main.py: SECRET_KEY, INGEST_TOKEN, ADMIN_*, UI_PROTOTYPE</div>
+        <div class="h-8 rounded border-l-4 border-red-500 bg-stone-100 flex items-center px-2">mailer.py: POSTFIX_* frozen at import time</div>
+        <div class="h-8 rounded border-l-4 border-red-500 bg-stone-100 flex items-center px-2">store.py: DB_* read in factory</div>
+      </div>
+    </div>
+    <div class="rounded-lg border border-slate-200 bg-white p-4">
+      <p class="text-xs uppercase tracking-wider text-slate-500 mb-2">After — one interface, one place</p>
+      <div class="relative h-40">
+        <div class="deep absolute inset-x-4 top-2 bottom-2 rounded text-white p-3 text-xs">
+          <p class="uppercase tracking-wider text-slate-300">config module</p>
+          <p class="text-slate-400">reads env once · validates required values · hands typed settings to store, mailer, routes</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <p class="text-sm"><strong>Problem:</strong> fourteen <span class="font-mono text-xs">os.environ</span> reads across three modules, some at import time — a missing <span class="font-mono text-xs">DB_USER</span> surfaces as a KeyError deep inside a request, not at startup.</p>
+  <p class="text-sm"><strong>Solution:</strong> a config module that reads and validates env once at startup and hands typed settings to the store factory, the forwarder, and the routes.</p>
+  <ul class="text-sm list-disc pl-5 space-y-1">
+    <li>locality: config errors surface at startup</li>
+    <li>leverage: one interface for every module's settings</li>
+    <li>deletion test passes: complexity concentrates</li>
+  </ul>
+</article>
+
+<!-- Candidate 3 -->
+<article id="c3" class="rounded-xl border border-stone-200 bg-white p-6 space-y-4 shadow-sm">
+  <div class="flex items-center gap-3">
+    <h2 class="font-serif text-xl">3 · Extract the ingest auth gate</h2>
+    <span class="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 text-xs font-semibold">Speculative</span>
+    <span class="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 text-xs">in-process</span>
+  </div>
+  <p class="font-mono text-sm text-slate-600">app/main.py (ingest route, 39 lines)</p>
+
+  <div class="grid grid-cols-2 gap-4">
+    <div class="rounded-lg border border-slate-200 bg-white p-4">
+      <p class="text-xs uppercase tracking-wider text-slate-500 mb-2">Before — auth and dispatch interleaved</p>
+      <div class="space-y-1 text-xs font-mono">
+        <div class="h-8 rounded border-l-4 border-slate-300 bg-stone-100 flex items-center px-2">token-configured check</div>
+        <div class="h-8 rounded border-l-4 border-red-500 bg-stone-100 flex items-center px-2">header compare + 6 debug log fields</div>
+        <div class="h-8 rounded border-l-4 border-slate-300 bg-stone-100 flex items-center px-2">parse → lookup → forward</div>
+      </div>
+    </div>
+    <div class="rounded-lg border border-slate-200 bg-white p-4">
+      <p class="text-xs uppercase tracking-wider text-slate-500 mb-2">After — decorator like requires_basic_auth</p>
+      <div class="relative h-40">
+        <div class="absolute inset-x-4 top-2 h-16 rounded border-2 border-slate-700 p-2 text-xs bg-white">
+          <p class="uppercase tracking-wider text-slate-500">@requires_ingest_token</p>
+          <p class="text-slate-500">one place: check, log, reject</p>
+        </div>
+        <div class="absolute inset-x-4 bottom-2 h-12 rounded border border-slate-300 p-2 text-xs text-slate-500">
+          ingest route: parse → lookup → forward only
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <p class="text-sm"><strong>Problem:</strong> the ingest route mixes token verification (with verbose debug logging) into the dispatch body; the auth rule can't be tested without posting raw bytes.</p>
+  <p class="text-sm"><strong>Solution:</strong> mirror the existing <span class="font-mono text-xs">requires_basic_auth</span> decorator pattern with a <span class="font-mono text-xs">requires_ingest_token</span> decorator; the route body keeps only forwarding dispatch.</p>
+  <ul class="text-sm list-disc pl-5 space-y-1">
+    <li>locality: auth rule in one decorator</li>
+    <li>matches the existing auth pattern</li>
+    <li>route body reads as dispatch only</li>
+  </ul>
+  <div class="rounded border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900">Honest caveat: the route works and is tested indirectly through the UI suite's ingest check; this is polish, not friction.</div>
+</article>
+
+</section>
+
+<section id="top-recommendation" class="rounded-xl border-2 border-slate-800 deep text-white p-8 space-y-3">
+  <p class="text-xs uppercase tracking-wider text-slate-300">Top recommendation</p>
+  <h2 class="font-serif text-2xl"><a href="#c1" class="underline decoration-slate-500">Deepen the forward-composition module</a></h2>
+  <p class="text-sm text-slate-300">Forwarding is the product — and it's the only core behaviour with zero tests. The pure functions already exist; the seam just needs to reach the send loop so the whole pipeline becomes testable through one interface.</p>
+</section>
+
+</main>
+</body>
+</html>
