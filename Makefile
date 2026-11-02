@@ -16,4 +16,6 @@ test: build
 	python -m unittest discover -s tests -t . -v
 
 run: build
-	docker run --rm -it -p 8080:8080 $(IMAGE):$(TAG)
+	docker run --rm -it \
+		-p 8080:8080 \
+		$(IMAGE):$(TAG)
