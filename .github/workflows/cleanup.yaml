@@ -17,3 +17,6 @@ jobs:
     permissions:
       contents: read
       packages: write
+    with:
+      # workflow_dispatch defaults to a preview; anything else really prunes.
+      dry-run: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || false }}
