@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Architecture review for relayer</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script type="module">
+  import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+  mermaid.initialize({ startOnLoad: true, theme: "neutral", securityLevel: "loose" });
+</script>
+<style>
+  .seam { stroke-dasharray: 4 4; }
+  .deep { background: linear-gradient(135deg, #0f172a, #1e293b); }
+</style>
+</head>
+<body class="bg-stone-50 text-slate-900 font-sans">
+<main class="max-w-5xl mx-auto px-6 py-12 space-y-12">
+
+<header class="space-y-3">
+  <h1 class="font-serif text-3xl">Architecture review — <span class="font-mono text-2xl">relayer</span></h1>
+  <p class="text-sm text-slate-500">2026-11-02 · third pass (after forwarder seam, config module, ingest auth gate)</p>
+  <div class="flex gap-6 text-xs text-slate-600 pt-2 border-t border-stone-200">
+    <span><span class="inline-block w-3 h-3 border border-slate-400 align-middle"></span> module</span>
+    <span><span class="inline-block w-6 border-t-2 border-dashed border-slate-400 align-middle"></span> seam</span>
+    <span><span class="inline-block w-6 border-t-2 border-red-600 align-middle"></span> leakage</span>
+    <span><span class="inline-block w-3 h-3 deep align-middle"></span> deep module</span>
+  </div>
+</header>
+
+<section id="candidates" class="space-y-10">
+
+<!-- Candidate 1 -->
+<article id="c1" class="rounded-xl border border-stone-200 bg-white p-6 space-y-4 shadow-sm">
+  <div class="flex items-center gap-3">
+    <h2 class="font-serif text-xl">1 · Finish the config module's job</h2>
+    <span class="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-xs font-semibold">Strong</span>
+    <span class="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 text-xs">in-process</span>
+  </div>
+  <p class="font-mono text-sm text-slate-600">app/main.py · app/store.py · app/mailer.py · app/config.py</p>
+
+  <div class="grid grid-cols-2 gap-4">
+    <div class="rounded-lg border border-slate-200 bg-white p-4">
+      <p class="text-xs uppercase tracking-wider text-slate-500 mb-2">Before — config half-wired</p>
+      <pre class="mermaid">
+flowchart TD
+  C[config.load] -->|"settings"| M[main.py]
+  M -.still reads env directly.-> E1[LOG_LEVEL, SECRET_KEY, UI_PROTOTYPE]
+  F[mailer factory] -.env fallback path.-> E2[POSTFIX_*]
+  S[store factory] -.env fallback path.-> E3[DB_*]
+  classDef leak stroke:#dc2626,stroke-width:2px;
+  class E1,E2,E3 leak
+      </pre>
+    </div>
+    <div class="rounded-lg border border-slate-200 bg-white p-4">
+      <p class="text-xs uppercase tracking-wider text-slate-500 mb-2">After — one source of truth</p>
+      <div class="relative h-56">
+        <div class="deep absolute inset-x-6 top-3 h-12 rounded text-white p-2 text-xs flex items-center">
+          <p class="uppercase tracking-wider text-slate-300">config.load() — the only env reader</p>
+        </div>
+        <svg class="absolute inset-0 w-full h-full">
+          <line x1="25%" y1="52" x2="18%" y2="86" stroke="#334155" stroke-width="2"/>
+          <line x1="50%" y1="52" x2="50%" y2="86" stroke="#334155" stroke-width="2"/>
+          <line x1="75%" y1="52" x2="82%" y2="86" stroke="#334155" stroke-width="2"/>
+        </svg>
+        <div class="absolute left-6 top-24 w-[26%] h-20 rounded border border-slate-400 p-2 text-xs bg-white">
+          <p class="uppercase tracking-wider text-slate-500">store factory</p>
+        </div>
+        <div class="absolute left-1/2 -translate-x-1/2 top-24 w-[26%] h-20 rounded border border-slate-400 p-2 text-xs bg-white">
+          <p class="uppercase tracking-wider text-slate-500">mailer factory</p>
+        </div>
+        <div class="absolute right-6 top-24 w-[26%] h-20 rounded border border-slate-400 p-2 text-xs bg-white">
+          <p class="uppercase tracking-wider text-slate-500">routes</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <p class="text-sm"><strong>Problem:</strong> the config module exists but three env fallback paths survive — <span class="font-mono text-xs">main.py</span> still reads <span class="font-mono text-xs">LOG_LEVEL</span>/<span class="font-mono text-xs">SECRET_KEY</span>/<span class="font-mono text-xs">UI_PROTOTYPE</span> directly, and both factories keep a settings-less branch that re-reads env. The interface says "settings in", but callers can still bypass it.</p>
+  <p class="text-sm"><strong>Solution:</strong> delete the fallback branches — factories require settings; <span class="font-mono text-xs">main.py</span> takes <span class="font-mono text-xs">secret_key</span>, <span class="font-mono text-xs">ui_prototype</span>, and log level from them. Env reads collapse to one module.</p>
+  <ul class="text-sm list-disc pl-5 space-y-1">
+    <li>locality: every env read in one module</li>
+    <li>deletion test passes: fallbacks are pass-throughs</li>
+    <li>interface stops lying about bypass routes</li>
+  </ul>
+</article>
+
+<!-- Candidate 2 -->
+<article id="c2" class="rounded-xl border border-stone-200 bg-white p-6 space-y-4 shadow-sm">
+  <div class="flex items-center gap-3">
+    <h2 class="font-serif text-xl">2 · Extract the shared stylesheet</h2>
+    <span class="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-xs font-semibold">Worth exploring</span>
+    <span class="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 text-xs">in-process</span>
+  </div>
+  <p class="font-mono text-sm text-slate-600">app/templates/index.html (443 CSS lines) · app/templates/prototype.html (80)</p>
+
+  <div class="grid grid-cols-2 gap-4">
+    <div class="rounded-lg border border-slate-200 bg-white p-4">
+      <p class="text-xs uppercase tracking-wider text-slate-500 mb-2">Before — sidebar CSS lives in index.html</p>
+      <div class="space-y-1 text-xs font-mono">
+        <div class="h-10 rounded border-l-4 border-red-500 bg-stone-100 flex items-center px-2">index.html: 443-line style block (sidebar + controls + theme)</div>
+        <div class="h-10 rounded border-l-4 border-slate-300 bg-stone-100 flex items-center px-2">prototype.html: 80-line style block (switcher only)</div>
+      </div>
+    </div>
+    <div class="rounded-lg border border-slate-200 bg-white p-4">
+      <p class="text-xs uppercase tracking-wider text-slate-500 mb-2">After — one stylesheet, two thin templates</p>
+      <div class="relative h-40">
+        <div class="deep absolute inset-x-4 top-2 h-20 rounded text-white p-2 text-xs">
+          <p class="uppercase tracking-wider text-slate-300">static/relayer.css</p>
+          <p class="text-slate-400">sidebar · recipient controls · theme switch — served once, cached</p>
+        </div>
+        <div class="absolute inset-x-4 bottom-2 h-10 rounded border border-dashed border-slate-400 p-2 text-xs text-slate-500">
+          templates link it; prototype keeps its 80-line switcher block
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <p class="text-sm"><strong>Problem:</strong> the sidebar stylesheet lives inside <span class="font-mono text-xs">index.html</span>, so every page load re-sends 443 lines of CSS and the prototype template can't share it without duplication.</p>
+  <p class="text-sm"><strong>Solution:</strong> move the shared style block to <span class="font-mono text-xs">static/relayer.css</span> and link it from both templates; the prototype keeps only its switcher-specific rules.</p>
+  <ul class="text-sm list-disc pl-5 space-y-1">
+    <li>locality: styling rules in one file</li>
+    <li>browser caches it; pages get smaller</li>
+    <li>prototype deletion leaves CSS intact</li>
+  </ul>
+</article>
+
+<!-- Candidate 3 -->
+<article id="c3" class="rounded-xl border border-stone-200 bg-white p-6 space-y-4 shadow-sm">
+  <div class="flex items-center gap-3">
+    <h2 class="font-serif text-xl">3 · Route tests without env bootstrap</h2>
+    <span class="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 text-xs font-semibold">Speculative</span>
+    <span class="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 text-xs">mock</span>
+  </div>
+  <p class="font-mono text-sm text-slate-600">tests/_bootstrap.py · tests/__init__.py · app/main.py</p>
+
+  <div class="grid grid-cols-2 gap-4">
+    <div class="rounded-lg border border-slate-200 bg-white p-4">
+      <p class="text-xs uppercase tracking-wider text-slate-500 mb-2">Before — import-order bootstrap</p>
+      <div class="space-y-1 text-xs font-mono">
+        <div class="h-9 rounded border-l-4 border-red-500 bg-stone-100 flex items-center px-2">test module must import _bootstrap before app.main</div>
+        <div class="h-9 rounded border-l-4 border-slate-300 bg-stone-100 flex items-center px-2">discover -s tests skips __init__.py (already bit us)</div>
+      </div>
+    </div>
+    <div class="rounded-lg border border-slate-200 bg-white p-4">
+      <p class="text-xs uppercase tracking-wider text-slate-500 mb-2">After — app factory takes settings</p>
+      <div class="relative h-40">
+        <div class="deep absolute inset-x-4 top-2 h-20 rounded text-white p-2 text-xs">
+          <p class="uppercase tracking-wider text-slate-300">create_app(settings, store)</p>
+          <p class="text-slate-400">builds the Flask app from explicit inputs; no import-time env</p>
+        </div>
+        <div class="absolute inset-x-4 bottom-2 h-10 rounded border border-dashed border-slate-400 p-2 text-xs text-slate-500">
+          wsgi.py calls create_app(load()); tests call it with fakes
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <p class="text-sm"><strong>Problem:</strong> tests need an import-order bootstrap (<span class="font-mono text-xs">_bootstrap</span> before <span class="font-mono text-xs">app.main</span>) because the app reads env at import; the <span class="font-mono text-xs">discover -s tests</span> pitfall already bit once.</p>
+  <p class="text-sm"><strong>Solution:</strong> an app factory — <span class="font-mono text-xs">create_app(settings, store)</span> — so tests construct the app with explicit inputs and the bootstrap disappears.</p>
+  <ul class="text-sm list-disc pl-5 space-y-1">
+    <li>tests accept dependencies, not env</li>
+    <li>bootstrap module deleted</li>
+    <li>two adapters already justify the seam</li>
+  </ul>
+  <div class="rounded border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900">Cost note: touches every route's module-level references (INGEST_TOKEN, ADMIN_*, store); the largest diff of the three.</div>
+</article>
+
+</section>
+
+<section id="top-recommendation" class="rounded-xl border-2 border-slate-800 deep text-white p-8 space-y-3">
+  <p class="text-xs uppercase tracking-wider text-slate-300">Top recommendation</p>
+  <h2 class="font-serif text-2xl"><a href="#c1" class="underline decoration-slate-500">Finish the config module's job</a></h2>
+  <p class="text-sm text-slate-300">The config module exists but its interface still lies — three bypass paths survive. Deleting them is a small diff that makes "env is read in one place" true instead of aspirational, and it shrinks candidate 3's diff if you take it later.</p>
+</section>
+
+</main>
+</body>
+</html>
