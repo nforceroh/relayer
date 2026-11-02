@@ -3,9 +3,19 @@ name: Docker Image for GHCR
 on:
   push:
   pull_request:
+  schedule:
+    # Daily, after the base image's own 05:23/06:23 UTC rebuilds. Polls the
+    # base image digest and rebuilds only when it actually changed.
+    - cron: "41 7 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   IMAGE: ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}
+  BASE_IMAGE: ghcr.io/nforceroh/k8s-alpine-baseimage:3.24
 
 jobs:
   test:
@@ -27,9 +37,81 @@ jobs:
       - name: Run tests
         run: python -m unittest discover -s tests -t . -v
 
+  check-base-image:
+    name: Check for base image update
+    runs-on: ubuntu-latest
+    # Only the scheduled run has to decide whether the base image moved.
+    # Pushes, PRs and manual dispatches always build (dispatch = force).
+    if: github.event_name == 'schedule'
+
+    permissions:
+      contents: read
+      packages: read
+
+    outputs:
+      should_build: ${{ steps.check.outputs.should_build }}
+      base_digest: ${{ steps.check.outputs.base_digest }}
+
+    steps:
+      - name: Compare base image digest with the published image
+        id: check
+        env:
+          BASE_IMAGE: ${{ env.BASE_IMAGE }}
+          IMAGE: ${{ env.IMAGE }}
+        run: |
+          set -euo pipefail
+
+          # Resolve the digest the mutable tag currently points at.
+          repo="${BASE_IMAGE#ghcr.io/}"
+          name="${repo%:*}"
+          tag="${repo##*:}"
+
+          token=$(curl -fsSL \
+            "https://ghcr.io/token?scope=repository:${name}:pull&service=ghcr.io" \
+            | jq -r .token)
+
+          base_digest=$(curl -fsSL -o /dev/null -D - \
+            -H "Authorization: Bearer ${token}" \
+            -H "Accept: application/vnd.oci.image.index.v1+json,application/vnd.docker.distribution.manifest.list.v2+json,application/vnd.oci.image.manifest.v1+json,application/vnd.docker.distribution.manifest.v2+json" \
+            "https://ghcr.io/v2/${name}/manifests/${tag}" \
+            | tr -d '\r' \
+            | awk -F': ' 'tolower($1)=="docker-content-digest"{print $2}')
+
+          if [ -z "${base_digest}" ]; then
+            echo "::error::Could not resolve a digest for ${BASE_IMAGE}"
+            exit 1
+          fi
+
+          # The digest the last published image was built from, recorded by
+          # the Dockerfile's org.opencontainers.image.base.digest label.
+          labels=$(docker buildx imagetools inspect "${IMAGE}:latest" \
+            --format '{{json .Image.Config.Labels}}' 2>/dev/null || echo '{}')
+          previous=$(printf '%s' "${labels}" \
+            | jq -r '."org.opencontainers.image.base.digest" // empty')
+
+          echo "base image digest now : ${base_digest}"
+          echo "digest last built from: ${previous:-<none>}"
+
+          if [ "${base_digest}" = "${previous}" ]; then
+            echo "should_build=false" >> "$GITHUB_OUTPUT"
+            echo "Base image unchanged; skipping rebuild."
+          else
+            echo "should_build=true" >> "$GITHUB_OUTPUT"
+            echo "Base image changed; rebuilding."
+          fi
+
+          echo "base_digest=${base_digest}" >> "$GITHUB_OUTPUT"
+
   deploy-docker-image:
     runs-on: ubuntu-latest
-    needs: test
+    needs: [test, check-base-image]
+    # always() is required: without it a skipped check-base-image (the push
+    # and PR paths) would skip this job too. The explicit result check keeps
+    # a failed test suite from reaching the build.
+    if: |
+      always()
+      && needs.test.result == 'success'
+      && needs.check-base-image.outputs.should_build != 'false'
 
     permissions:
       contents: read
@@ -42,6 +124,17 @@ jobs:
         run: echo "BUILD_DATE=$(date +'%Y%m%d%H%M%S')" >> $GITHUB_ENV
 
       - uses: actions/checkout@v4
+
+      - name: Resolve base image digest
+        id: base
+        env:
+          BASE_IMAGE: ${{ env.BASE_IMAGE }}
+        run: |
+          set -euo pipefail
+          digest=$(docker buildx imagetools inspect "${BASE_IMAGE}" \
+            --format '{{.Manifest.Digest}}')
+          echo "digest=${digest}" >> "$GITHUB_OUTPUT"
+          echo "Base image ${BASE_IMAGE} -> ${digest}"
 
       - name: Extract metadata (tags, labels) for Docker
         id: meta
@@ -71,6 +164,9 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
+          # Re-resolve the base image instead of trusting a cached layer, so a
+          # rebuilt base image is actually picked up.
+          pull: true
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -78,3 +174,4 @@ jobs:
             BUILD_DATE=${{ env.BUILD_DATE }}
             VERSION=${{ env.BUILD_DATE }}
             VCS_REF=${{ github.sha }}
+            BASE_DIGEST=${{ steps.base.outputs.digest }}
