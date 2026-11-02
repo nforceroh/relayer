@@ -17,14 +17,26 @@ Two adapters satisfy this interface:
 - MySQLRecipientStore -- production, backed by the forward_recipients table.
 - InMemoryRecipientStore -- tests and local experiments; starts empty.
 
-Pick one with store_from_env(), which reads the DB_* environment
-variables once at startup.
+Pick one with store_from_env(settings), which builds the MySQL
+adapter from loaded settings.
 """
 
-import os
+
+from typing import Protocol
 
 from .config import Settings
 from .db import MySQLRecipientStore
+
+
+class RecipientStore(Protocol):
+    """The recipient store interface. Satisfied by MySQLRecipientStore
+    (production) and InMemoryRecipientStore (tests)."""
+
+    def list_recipients(self, mailbox: str | None = None) -> list[dict]: ...
+    def get_active_recipients(self, mailbox: str) -> list[str]: ...
+    def add_recipient(self, mailbox: str, recipient: str, label: str | None) -> None: ...
+    def set_enabled(self, row_id: int, enabled: bool) -> None: ...
+    def delete_recipient(self, row_id: int) -> None: ...
 
 
 class InMemoryRecipientStore:
@@ -76,17 +88,8 @@ class InMemoryRecipientStore:
         self._rows = [row for row in self._rows if row["id"] != row_id]
 
 
-def store_from_env(settings: Settings | None = None) -> MySQLRecipientStore:
-    """Returns the production store built from loaded settings (or from
-    the environment directly when settings are not supplied)."""
-    if settings is None:
-        return MySQLRecipientStore(
-            host=os.environ.get("DB_HOST", "mariadb"),
-            port=int(os.environ.get("DB_PORT", "3306")),
-            user=os.environ["DB_USER"],
-            password=os.environ.get("DB_PASSWORD", ""),
-            database=os.environ.get("DB_DATABASE", "mail"),
-        )
+def store_from_env(settings: Settings) -> MySQLRecipientStore:
+    """Returns the production store built from loaded settings."""
     return MySQLRecipientStore(
         host=settings.db_host,
         port=settings.db_port,

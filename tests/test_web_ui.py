@@ -1,10 +1,28 @@
 import unittest
-from unittest import mock
 
-from tests import _bootstrap  # noqa: F401  (sets required env before app.main loads)
-
-from app import main
+from app.config import Settings
+from app.main import create_app
 from app.store import InMemoryRecipientStore
+
+
+def make_settings(**overrides):
+    base = dict(
+        db_host="mariadb",
+        db_port=3306,
+        db_user="relayer",
+        db_password="pw",
+        db_database="mail",
+        ingest_token="test-ingest-token",
+        admin_user="admin",
+        admin_pass="test-password",
+        secret_key="test-secret",
+        ui_prototype=False,
+        postfix_host="postfix",
+        postfix_port=25,
+        debug_smtp=False,
+    )
+    base.update(overrides)
+    return Settings(**base)
 
 
 def seed_store(*rows):
@@ -23,21 +41,15 @@ def seed_store(*rows):
 
 class ProductionSidebarTests(unittest.TestCase):
     def setUp(self):
-        self.client = main.app.test_client()
+        self.store = seed_store(("old@example.com", "person@example.net", "Personal", 1))
+        self.settings = make_settings()
+        self.app = create_app(self.settings, self.store)
+        self.app.config["TESTING"] = True
+        self.client = self.app.test_client()
         self.auth = ("admin", "test-password")
-        patcher = mock.patch.object(main, "ADMIN_PASS", "test-password")
-        patcher.start()
-        self.addCleanup(patcher.stop)
-
-    def use_store(self, store):
-        old_store = main.store
-        main.store = store
-        self.addCleanup(setattr, main, "store", old_store)
 
     def test_default_page_renders_persistent_sidebar(self):
-        self.use_store(seed_store(("old@example.com", "person@example.net", "Personal", 1)))
-        with mock.patch.dict(main.os.environ, {"UI_PROTOTYPE": "0"}):
-            response = self.client.get("/", auth=self.auth)
+        response = self.client.get("/", auth=self.auth)
 
         self.assertEqual(response.status_code, 200)
         page = response.get_data(as_text=True)
@@ -52,22 +64,24 @@ class ProductionSidebarTests(unittest.TestCase):
         self.assertNotIn("UI prototype:", page)
 
     def test_creating_mailbox_saves_first_recipient_and_selects_it(self):
-        self.use_store(InMemoryRecipientStore())
-        with mock.patch.dict(main.os.environ, {"UI_PROTOTYPE": "0"}):
-            response = self.client.post(
-                "/recipients",
-                data={
-                    "mailbox": "new@example.com",
-                    "recipient": "first@example.net",
-                    "label": "Personal",
-                },
-                auth=self.auth,
-            )
+        empty_store = InMemoryRecipientStore()
+        app = create_app(make_settings(), empty_store)
+        client = app.test_client()
+
+        response = client.post(
+            "/recipients",
+            data={
+                "mailbox": "new@example.com",
+                "recipient": "first@example.net",
+                "label": "Personal",
+            },
+            auth=self.auth,
+        )
 
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response.headers["Location"], "/?mailbox=new@example.com")
         self.assertEqual(
-            main.store.list_recipients("new@example.com"),
+            empty_store.list_recipients("new@example.com"),
             [{
                 "id": 1,
                 "mailbox": "new@example.com",
@@ -79,9 +93,10 @@ class ProductionSidebarTests(unittest.TestCase):
         )
 
     def test_prototype_mode_keeps_preview_only_controls(self):
-        self.use_store(seed_store(("old@example.com", "person@example.net", "Personal", 1)))
-        with mock.patch.dict(main.os.environ, {"UI_PROTOTYPE": "1"}):
-            response = self.client.get("/", auth=self.auth)
+        app = create_app(make_settings(ui_prototype=True), self.store)
+        client = app.test_client()
+
+        response = client.get("/", auth=self.auth)
 
         page = response.get_data(as_text=True)
         self.assertEqual(response.status_code, 200)
@@ -92,22 +107,20 @@ class ProductionSidebarTests(unittest.TestCase):
         self.assertIn('aria-label="Prototype variations"', page)
 
     def test_recipient_actions_keep_current_mailbox_selected(self):
-        self.use_store(seed_store(("old@example.com", "person@example.net", "Personal", 1)))
-        with mock.patch.dict(main.os.environ, {"UI_PROTOTYPE": "0"}):
-            toggle_response = self.client.post(
-                "/recipients/1/toggle",
-                data={"mailbox": "old@example.com", "enabled": "0"},
-                auth=self.auth,
-            )
-            delete_response = self.client.post(
-                "/recipients/1/delete",
-                data={"mailbox": "old@example.com"},
-                auth=self.auth,
-            )
+        toggle_response = self.client.post(
+            "/recipients/1/toggle",
+            data={"mailbox": "old@example.com", "enabled": "0"},
+            auth=self.auth,
+        )
+        delete_response = self.client.post(
+            "/recipients/1/delete",
+            data={"mailbox": "old@example.com"},
+            auth=self.auth,
+        )
 
         self.assertEqual(toggle_response.headers["Location"], "/?mailbox=old@example.com")
         self.assertEqual(delete_response.headers["Location"], "/?mailbox=old@example.com")
-        self.assertEqual(main.store.list_recipients(), [])
+        self.assertEqual(self.store.list_recipients(), [])
 
 
 if __name__ == "__main__":

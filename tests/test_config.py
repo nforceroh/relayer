@@ -78,3 +78,17 @@ class ConfigTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FactoryWiringTests(unittest.TestCase):
+    def test_store_factory_requires_settings(self):
+        from app.store import store_from_env
+        with mock.patch.dict(config.os.environ, {"DB_USER": "relayer"}, clear=True):
+            with self.assertRaises(TypeError):
+                store_from_env()
+
+    def test_mailer_factory_requires_settings(self):
+        from app import mailer
+        with mock.patch.dict(config.os.environ, {"LOG_LEVEL": "INFO"}, clear=True):
+            with self.assertRaises(TypeError):
+                mailer.smtp_send_message_from_env()

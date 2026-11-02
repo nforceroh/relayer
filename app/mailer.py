@@ -5,7 +5,6 @@ import email.policy
 import email.utils
 import html
 import logging
-import os
 import re
 import smtplib
 from email.message import EmailMessage
@@ -119,21 +118,15 @@ def build_forward(mailbox: str, original: email.message.Message, recipient: str)
     return msg
 
 
-def smtp_send_message_from_env(settings=None) -> "callable[[EmailMessage], None]":
-    """Builds the real SMTP transport from loaded settings (or from the
-    environment directly when settings are not supplied).
+def smtp_send_message_from_env(settings) -> "callable[[EmailMessage], None]":
+    """Builds the real SMTP transport from loaded settings.
 
     Reads configuration at call time (not import time) so tests never
     construct the real transport.
     """
-    if settings is None:
-        debug_smtp = os.environ.get("LOG_LEVEL", "INFO").upper() == "DEBUG"
-        host = os.environ.get("POSTFIX_HOST", "postfix")
-        port = int(os.environ.get("POSTFIX_PORT", "25"))
-    else:
-        debug_smtp = settings.debug_smtp
-        host = settings.postfix_host
-        port = settings.postfix_port
+    debug_smtp = settings.debug_smtp
+    host = settings.postfix_host
+    port = settings.postfix_port
 
     def send_message(msg: EmailMessage) -> None:
         log.debug(
