@@ -185,3 +185,81 @@ class RouteWiringTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.get_json()["status"], "ok")
         factory.assert_called_once_with(settings)
+
+
+class ExtractionTests(unittest.TestCase):
+    """The message-extraction seam: how messy real-world mail becomes
+    (plain_text, html_text) for forward composition."""
+
+    @staticmethod
+    def multipart_message(*parts):
+        msg = EmailMessage()
+        msg["From"] = "noreply@service.example"
+        msg["Subject"] = "Your login code"
+        msg.make_mixed()
+        for content_type, content in parts:
+            msg.add_attachment(content.encode(), maintype="text",
+                               subtype=content_type.split("/")[1])
+        return msg
+
+    def test_multipart_with_both_parts_extracts_both(self):
+        original = self.multipart_message(
+            ("text/plain", "Your code is 482913."),
+            ("text/html", "<p>Your code is <b>482913</b>.</p>"),
+        )
+
+        plain, html = mailer._extract_parts(original)
+
+        self.assertIn("482913", plain)
+        self.assertIn("<b>482913</b>", html)
+
+    def test_html_only_message_returns_empty_plain(self):
+        original = EmailMessage()
+        original["From"] = "noreply@service.example"
+        original["Subject"] = "Newsletter"
+        original.set_content("<p>Hello <b>world</b></p>", subtype="html")
+
+        plain, html = mailer._extract_parts(original)
+
+        self.assertEqual(plain, "")
+        self.assertIn("<b>world</b>", html)
+
+    def test_plain_only_message_returns_empty_html(self):
+        original = EmailMessage()
+        original["From"] = "noreply@service.example"
+        original["Subject"] = "Note"
+        original.set_content("Just text.")
+
+        plain, html = mailer._extract_parts(original)
+
+        # The email library appends a trailing newline to text content.
+        self.assertEqual(plain, "Just text.\n")
+        self.assertEqual(html, "")
+
+    def test_unreadable_part_is_skipped_not_fatal(self):
+        # A part whose content cannot be decoded must not break extraction;
+        # the other part still comes through.
+        original = self.multipart_message(
+            ("text/plain", "readable part"),
+            ("text/html", "<p>fine</p>"),
+        )
+        for part in original.walk():
+            if part.get_content_type() == "text/plain":
+                part.set_payload(b"\xff\xfe\xfa")  # undecodable bytes
+                break
+
+        plain, html = mailer._extract_parts(original)
+
+        self.assertIn("<p>fine</p>", html)
+
+    def test_html_to_text_strips_tags_and_decodes_entities(self):
+        result = mailer._html_to_text(
+            "<p>Hello&nbsp;& welcome</p>\n  <b>bold</b>"
+        )
+
+        # &nbsp; decodes to a non-breaking space, which the whitespace
+        # normalization keeps (it is not a plain space or tab).
+        self.assertEqual(result, "Hello\xa0& welcome\nbold")
+
+    def test_html_to_text_of_empty_string_is_empty(self):
+        self.assertEqual(mailer._html_to_text(""), "")
