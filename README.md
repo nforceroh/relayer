@@ -69,7 +69,7 @@ Then:
 
 1. Open **http://localhost:8080** -- log in with `admin` / `admin` (set
    in `dev/docker-compose.yml`, change before using this anywhere real).
-   You should see `toyota@martintwingles.com` already seeded with two
+   You should see `inbox@example.com` already seeded with two
    recipients from `dev/seed.sql`. The compact sidebar is the UI:
    use **+ Add mailbox** to add a mailbox and its first recipient;
    toggles and remove buttons persist through the web UI.
@@ -84,11 +84,11 @@ Then:
      http://localhost:8080/ingest
    ```
 
-   You should get back `{"status": "ok", "mailbox": "toyota@martintwingles.com", "sent": [...], "failed": []}`.
+   You should get back `{"status": "ok", "mailbox": "inbox@example.com", "sent": [...], "failed": []}`.
 
 3. Open **http://localhost:8025** (MailHog's web UI) -- you should see
    two forwarded copies of the sample login-code email, one per seeded
-   recipient, each with `From: toyota@martintwingles.com` and a
+   recipient, each with `From: inbox@example.com` and a
    `[Code: 482913]` prefix pulled out of the message automatically.
 
 4. Try adding/removing a recipient in the web UI, then re-run the `curl`
@@ -238,14 +238,14 @@ to stay dumb and unconditional, this should rarely need to change.
 ### 5. Convert forwarding addresses from Alias to Mailbox
 
 Sieve only runs on real local delivery. Each address you want Relayer to
-manage (`toyota@martintwingles.com`, `aidvantage@martintwingles.com`,
-etc.) needs to be a real ViMbAdmin **Mailbox**, not an Alias:
+manage (`inbox@example.com`, `billing@example.com`, etc.) needs to be
+a real ViMbAdmin **Mailbox**, not an Alias:
 
 1. Create the Mailbox (a password is required by the form but never
    actually used, since nothing logs into it).
 2. Delete the old Alias entry for the same address.
-3. Add its recipients through Relayer's web UI (or `schema.sql`'s seed
-   section as a starting point).
+3. Add its recipients through Relayer's web UI. `schema.sql` ships the
+   table only; `dev/seed.sql` holds local test rows.
 
 ## Configuration reference
 

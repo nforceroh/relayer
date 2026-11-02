@@ -11,7 +11,7 @@ message, which is never re-sent itself.
 
 **Mailbox**
 A real Dovecot mailbox that receives inbound mail and forwards it
-onward — e.g. `toyota@martintwingles.com`. Not a database entity: a
+onward — e.g. `inbox@example.com`. Not a database entity: a
 mailbox exists once its first recipient row does. The target of every
 inbound delivery and the `From:` of every forward.
 

@@ -5,8 +5,8 @@
 
 CREATE TABLE IF NOT EXISTS forward_recipients (
     id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    mailbox     VARCHAR(255) NOT NULL,      -- e.g. toyota@martintwingles.com
-    recipient   VARCHAR(255) NOT NULL,      -- e.g. sylvain@nforcer.com
+    mailbox     VARCHAR(255) NOT NULL,      -- e.g. inbox@example.com
+    recipient   VARCHAR(255) NOT NULL,      -- e.g. person@example.net
     label       VARCHAR(255) NULL,          -- optional friendly note
     enabled     TINYINT(1) NOT NULL DEFAULT 1,
     created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -27,17 +27,3 @@ CREATE TABLE IF NOT EXISTS forward_recipients (
 --
 -- (adjust 'mail' above if your database name differs, and '%' to a
 -- narrower host/CIDR if your MySQL setup restricts by source host)
-
--- Seed data matching your current aliases, as a starting point.
--- Note: "andi@martintwingles.com" is a *local* mailbox on your own domain,
--- not an external address -- that's fine, the forward script just sends
--- it as a normal SMTP message and Postfix delivers it locally like any
--- other mail, no special-casing needed.
-INSERT INTO forward_recipients (mailbox, recipient, label) VALUES
-  ('toyota@martintwingles.com', 'sylvain@nforcer.com', NULL),
-  ('toyota@martintwingles.com', 'sylvainmartin73@gmail.com', NULL),
-  ('toyota@martintwingles.com', 'faithmartin2006@gmail.com', NULL),
-  ('aidvantage@martintwingles.com', 'sylvainmartin73@gmail.com', NULL),
-  ('aidvantage@martintwingles.com', 'mercedesariel2000@gmail.com', NULL),
-  ('aidvantage@martintwingles.com', 'sylvain@nforcer.com', NULL),
-  ('aidvantage@martintwingles.com', 'andi@martintwingles.com', NULL);

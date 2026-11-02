@@ -1,8 +1,8 @@
-Delivered-To: toyota@martintwingles.com
-Received: from mail.toyotafinancial.com (mail.toyotafinancial.com [203.0.113.10])
-	by mx.martintwingles.com; Mon, 24 Aug 2026 10:00:00 -0400
-From: "Toyota Financial" <noreply@toyotafinancial.com>
-To: toyota@martintwingles.com
+Delivered-To: inbox@example.com
+Received: from mail.example-sender.com (mail.example-sender.com [203.0.113.10])
+	by mx.example.com; Mon, 24 Aug 2026 10:00:00 -0400
+From: "Example Service" <noreply@example-sender.com>
+To: inbox@example.com
 Subject: Your one-time login code is 482913
 Date: Mon, 24 Aug 2026 10:00:00 -0400
 Content-Type: text/plain; charset=UTF-8
@@ -15,4 +15,4 @@ This code expires in 10 minutes. If you did not request this code,
 please ignore this email.
 
 Thanks,
-Toyota Financial Services
+Example Service
