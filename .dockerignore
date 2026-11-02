@@ -1,0 +1,10 @@
+# Keep the build context to what the Dockerfile actually copies:
+# requirements.txt, app/, wsgi.py and content/.
+.git
+.github
+docs
+dev
+tests
+k8s
+dovecot-side
+*.md

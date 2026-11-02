@@ -1,9 +1,6 @@
 name: Cleanup old GHCR images
 
 on:
-  push:
-    branches:
-      - main
   schedule:
     - cron: "17 3 * * 0"
   workflow_dispatch:
@@ -12,6 +9,9 @@ on:
         description: "Preview deletions only"
         required: false
         default: "true"
+
+env:
+  IMAGE_NAME: ${{ github.event.repository.name }}
 
 jobs:
   cleanup-ghcr:
@@ -22,13 +22,9 @@ jobs:
       packages: write
 
     steps:
-      - name: Get image name
-        run: echo "IMAGE_NAME=$(echo ${{ github.repository }} | cut -d'/' -f2)" >> "$GITHUB_ENV"
-
-      - name: Dry run mode
-        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'true' }}
-        run: echo "Dry run enabled. Skipping deletion."
-
+      # delete-only-untagged-versions is deliberately NOT set: every build is
+      # tagged with a unique BUILD_DATE, so restricting deletion to untagged
+      # versions meant this workflow never removed anything.
       - name: Cleanup old image versions
         if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.dry_run != 'true' }}
         uses: actions/delete-package-versions@v5
@@ -38,4 +34,9 @@ jobs:
           package-name: ${{ env.IMAGE_NAME }}
           package-type: container
           min-versions-to-keep: 5
-          delete-only-untagged-versions: "true"
+
+      - name: Dry run summary
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'true' }}
+        run: |
+          echo "Dry run: no versions deleted."
+          echo "Re-run with dry_run=false to keep the newest 5 versions and remove the rest."
