@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Architecture review for relayer</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script type="module">
+  import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+  mermaid.initialize({ startOnLoad: true, theme: "neutral", securityLevel: "loose" });
+</script>
+<style>
+  .seam { stroke-dasharray: 4 4; }
+  .deep { background: linear-gradient(135deg, #0f172a, #1e293b); }
+</style>
+</head>
+<body class="bg-stone-50 text-slate-900 font-sans">
+<main class="max-w-5xl mx-auto px-6 py-12 space-y-12">
+
+<header class="space-y-3">
+  <h1 class="font-serif text-3xl">Architecture review — <span class="font-mono text-2xl">relayer</span></h1>
+  <p class="text-sm text-slate-500">2026-11-02 · fourth pass (after app factory, config completion, transport wiring, stylesheet extraction)</p>
+  <div class="flex gap-6 text-xs text-slate-600 pt-2 border-t border-stone-200">
+    <span><span class="inline-block w-3 h-3 border border-slate-400 align-middle"></span> module</span>
+    <span><span class="inline-block w-6 border-t-2 border-dashed border-slate-400 align-middle"></span> seam</span>
+    <span><span class="inline-block w-6 border-t-2 border-red-600 align-middle"></span> leakage</span>
+    <span><span class="inline-block w-3 h-3 deep align-middle"></span> deep module</span>
+  </div>
+</header>
+
+<section id="candidates" class="space-y-10">
+
+<!-- Candidate 1 -->
+<article id="c1" class="rounded-xl border border-stone-200 bg-white p-6 space-y-4 shadow-sm">
+  <div class="flex items-center gap-3">
+    <h2 class="font-serif text-xl">1 · Test the message-extraction seam</h2>
+    <span class="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-xs font-semibold">Strong</span>
+    <span class="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 text-xs">in-process</span>
+  </div>
+  <p class="font-mono text-sm text-slate-600">app/mailer.py (_extract_parts, _html_to_text) · tests/test_mailer.py</p>
+
+  <div class="grid grid-cols-2 gap-4">
+    <div class="rounded-lg border border-slate-200 bg-white p-4">
+      <p class="text-xs uppercase tracking-wider text-slate-500 mb-2">Before — the trickiest code is untested</p>
+      <pre class="mermaid">
+flowchart TD
+  BF[build_forward] --> EP[_extract_parts<br/>multipart walk, try/except pass]
+  BF --> HT[_html_to_text<br/>regex strip, entity decode]
+  EP -.zero tests.-> X[❌]
+  HT -.zero tests.-> X
+  classDef leak stroke:#dc2626,stroke-width:2px;
+  class X leak
+      </pre>
+    </div>
+    <div class="rounded-lg border border-slate-200 bg-white p-4">
+      <p class="text-xs uppercase tracking-wider text-slate-500 mb-2">After — composition units cover the seam</p>
+      <div class="relative h-56">
+        <div class="deep absolute inset-x-6 top-3 h-12 rounded text-white p-2 text-xs flex items-center">
+          <p class="uppercase tracking-wider text-slate-300">extraction tests: multipart, html-only, plain-only, malformed parts</p>
+        </div>
+        <svg class="absolute inset-0 w-full h-full"><line x1="50%" y1="52" x2="50%" y2="86" stroke="#334155" stroke-width="2"/></svg>
+        <div class="absolute inset-x-6 top-24 bottom-4 rounded border border-slate-400 p-3 text-xs bg-white">
+          <p class="uppercase tracking-wider text-slate-500">existing pure functions — no production change needed</p>
+          <p class="text-slate-500">the seam already exists; only the tests are missing</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <p class="text-sm"><strong>Problem:</strong> the forward pipeline's tests cover the happy path and error statuses, but the two functions that handle real-world mail messiness — multipart walking with silent <span class="font-mono text-xs">except: pass</span>, and the HTML-to-text fallback — have zero coverage. These are where malformed emails will bite.</p>
+  <p class="text-sm"><strong>Solution:</strong> add composition tests for <span class="font-mono text-xs">_extract_parts</span> (multipart with both parts, html-only, plain-only, unparseable part content) and <span class="font-mono text-xs">_html_to_text</span> (tags, entities, whitespace). No production change — the pure functions are already the seam.</p>
+  <ul class="text-sm list-disc pl-5 space-y-1">
+    <li>locality: malformed-mail bugs become testable</li>
+    <li>leverage: existing interface, new coverage</li>
+    <li>zero production risk</li>
+  </ul>
+</article>
+
+<!-- Candidate 2 -->
+<article id="c2" class="rounded-xl border border-stone-200 bg-white p-6 space-y-4 shadow-sm">
+  <div class="flex items-center gap-3">
+    <h2 class="font-serif text-xl">2 · Collapse the prototype to variant C only</h2>
+    <span class="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-xs font-semibold">Worth exploring</span>
+    <span class="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 text-xs">in-process</span>
+  </div>
+  <p class="font-mono text-sm text-slate-600">app/templates/prototype.html (453 lines) · app/main.py · app/static/relayer.css</p>
+
+  <div class="grid grid-cols-2 gap-4">
+    <div class="rounded-lg border border-slate-200 bg-white p-4">
+      <p class="text-xs uppercase tracking-wider text-slate-500 mb-2">Before — three variants, one chosen</p>
+      <div class="space-y-1 text-xs font-mono">
+        <div class="h-9 rounded border-l-4 border-slate-300 bg-stone-100 flex items-center px-2">variant a: focus list (sidebar + details form)</div>
+        <div class="h-9 rounded border-l-4 border-slate-300 bg-stone-100 flex items-center px-2">variant b: recipient cards (grid layout)</div>
+        <div class="h-9 rounded border-l-4 border-emerald-500 bg-stone-100 flex items-center px-2">variant c: compact directory ← the one you picked</div>
+      </div>
+    </div>
+    <div class="rounded-lg border border-slate-200 bg-white p-4">
+      <p class="text-xs uppercase tracking-wider text-slate-500 mb-2">After — one prototype, half the file</p>
+      <div class="relative h-40">
+        <div class="deep absolute inset-x-4 top-2 h-20 rounded text-white p-2 text-xs">
+          <p class="uppercase tracking-wider text-slate-300">prototype.html — variant c only</p>
+          <p class="text-slate-400">~200 lines: the mock interactions you previewed, minus a/b branches and the switcher</p>
+        </div>
+        <div class="absolute inset-x-4 bottom-2 h-10 rounded border border-dashed border-slate-400 p-2 text-xs text-slate-500">
+          variant a/b markup, CSS, and switcher deleted
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <p class="text-sm"><strong>Problem:</strong> the prototype comparison served its purpose — you chose variant C, and it's now the production UI. Variants A and B are dead weight: 5 variant conditionals in the template, variant-specific CSS rules, and the bottom switcher all survive only to let you re-compare a decision already made.</p>
+  <p class="text-sm"><strong>Solution:</strong> delete variants A and B — markup, CSS rules, the switcher, and the variant plumbing in <span class="font-mono text-xs">main.py</span>. The prototype keeps variant C's mock interactions for previewing future UI ideas.</p>
+  <ul class="text-sm list-disc pl-5 space-y-1">
+    <li>deletion test passes: complexity vanishes</li>
+    <li>prototype halves: 453 → ~200 lines</li>
+    <li>variant plumbing leaves main.py</li>
+  </ul>
+</article>
+
+<!-- Candidate 3 -->
+<article id="c3" class="rounded-xl border border-stone-200 bg-white p-6 space-y-4 shadow-sm">
+  <div class="flex items-center gap-3">
+    <h2 class="font-serif text-xl">3 · Extract the adapter's connection boilerplate</h2>
+    <span class="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 text-xs font-semibold">Speculative</span>
+    <span class="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 text-xs">in-process</span>
+  </div>
+  <p class="font-mono text-sm text-slate-600">app/db.py (88 lines, 5 identical try/finally blocks)</p>
+
+  <div class="grid grid-cols-2 gap-4">
+    <div class="rounded-lg border border-slate-200 bg-white p-4">
+      <p class="text-xs uppercase tracking-wider text-slate-500 mb-2">Before — 5× the same open/close dance</p>
+      <div class="space-y-1 text-xs font-mono">
+        <div class="h-8 rounded border-l-4 border-red-500 bg-stone-100 flex items-center px-2">conn = self._connection() / try / with cursor / finally close</div>
+        <div class="h-8 rounded border-l-4 border-red-500 bg-stone-100 flex items-center px-2">…repeated 5 times…</div>
+      </div>
+    </div>
+    <div class="rounded-lg border border-slate-200 bg-white p-4">
+      <p class="text-xs uppercase tracking-wider text-slate-500 mb-2">After — one context helper</p>
+      <div class="relative h-40">
+        <div class="deep absolute inset-x-4 top-2 h-20 rounded text-white p-2 text-xs">
+          <p class="uppercase tracking-wider text-slate-300">@contextmanager _cursor()</p>
+          <p class="text-slate-400">each method: with self._cursor() as cur: cur.execute(...)</p>
+        </div>
+        <div class="absolute inset-x-4 bottom-2 h-10 rounded border border-dashed border-slate-400 p-2 text-xs text-slate-500">
+          ~30 lines deleted; the SQL stays front and center
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <p class="text-sm"><strong>Problem:</strong> five methods repeat the identical connection/try/finally boilerplate; the SQL — the only part that differs — is buried inside it.</p>
+  <p class="text-sm"><strong>Solution:</strong> a <span class="font-mono text-xs">@contextmanager</span> helper owning the connection lifecycle; each method keeps only its query.</p>
+  <ul class="text-sm list-disc pl-5 space-y-1">
+    <li>locality: connection handling in one place</li>
+    <li>SQL becomes the visible content</li>
+    <li>~30 lines deleted</li>
+  </ul>
+  <div class="rounded border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900">Honest caveat: the adapter is stable and thin; this is polish. Worth bundling with the next db change rather than as its own commit.</div>
+</article>
+
+</section>
+
+<section id="top-recommendation" class="rounded-xl border-2 border-slate-800 deep text-white p-8 space-y-3">
+  <p class="text-xs uppercase tracking-wider text-slate-300">Top recommendation</p>
+  <h2 class="font-serif text-2xl"><a href="#c1" class="underline decoration-slate-500">Test the message-extraction seam</a></h2>
+  <p class="text-sm text-slate-300">The pipeline's error paths are tested, but the code that handles real-world mail messiness — multipart walking and the HTML fallback — is not. The seam already exists as pure functions; only the tests are missing. Zero production risk, direct testability payoff.</p>
+</section>
+
+</main>
+</body>
+</html>
