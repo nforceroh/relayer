@@ -98,6 +98,15 @@ Then:
 `docker compose -f dev/docker-compose.yml down -v` tears it all down,
 including the database volume, so you get a clean slate next time.
 
+Run the unit tests separately when changing the application:
+
+```bash
+make test
+```
+
+`make test` runs the Python unit suite on the host. MySQL-backed tests are
+skipped unless the `TEST_DB_*` variables are configured.
+
 ## Production install (Kubernetes)
 
 ### 1. Database
@@ -124,7 +133,7 @@ Narrow `'%'` to a specific host/CIDR if your MySQL setup restricts by
 source host. `mailro` continues to be used by Dovecot exactly as it is
 today -- Relayer never touches it.
 
-### 2. Build and push the image
+### 2. Build and publish the image
 
 Production builds from `Dockerfile` (not `dev/Dockerfile.dev`, which is
 local-only) -- based on your shared `ghcr.io/nforceroh/alpine-base:3.24`,
@@ -134,9 +143,12 @@ under a dedicated `relayer` user, rather than a Docker `CMD` -- matching
 how `/init` starts services in your other images.
 
 ```bash
-docker build -t ghcr.io/nforceroh/relayer:latest .
-docker push ghcr.io/nforceroh/relayer:latest
+make build
+make test
 ```
+
+The shared CI workflow is the image publisher; see
+[`nforceroh/.github`](https://github.com/nforceroh/.github).
 
 ### 3. Kubernetes manifests
 
@@ -258,6 +270,10 @@ are configured.
 
 | Env var | Used by | Purpose | Image default (generic) |
 |---|---|---|---|
+| `LANG`, `LC_ALL` | Relayer | Process locale | `C.UTF-8` |
+| `TZ` | Relayer | Container timezone | `America/New_York` |
+| `PUID`, `PGID` | Relayer | UID/GID baked into the dedicated `relayer` user at build time | `3001`, `3000` |
+| `INSTALL_PATH` | Relayer | Application install path | `/data/web/relayer` |
 | `DB_HOST` | Relayer | MySQL host (matches Dovecot's existing var name) | `mariadb` |
 | `DB_PORT` | Relayer | MySQL port | `3306` |
 | `DB_DATABASE` | Relayer | Database name | `mail` |

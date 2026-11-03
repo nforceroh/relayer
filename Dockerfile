@@ -32,34 +32,23 @@ POSTFIX_HOST=postfix \
 POSTFIX_PORT=25 \
 ADMIN_USER=admin
 
-# Create the relayer user. Note: unlike PUID/PGID env vars that some
-# LinuxServer-style images reconcile at container start via a cont-init
-# script, this Dockerfile bakes the uid/gid in at build time -- if your
-# other images dynamically chown/re-map PUID/PGID at runtime and you want
-# the same here, add a matching cont-init.d script; not included here to
-# keep this image's footprint minimal.
-RUN \
-echo "Add relayer user" \
-&& addgroup -g ${PGID} relayer \
-&& adduser -D -u ${PUID} -G relayer -h ${INSTALL_PATH} -s /sbin/nologin relayer
-
-# python3/py3-pip only -- Flask, PyMySQL, and gunicorn are all pure Python,
-# so no compiler/musl-dev is needed.
+### Install Dependencies | Create relayer user
 RUN apk add --no-cache --update \
 python3 \
 py3-pip \
-&& mkdir -p ${INSTALL_PATH}
+&& addgroup -g ${PGID} relayer \
+&& mkdir -p ${INSTALL_PATH} \
+&& adduser -D -u ${PUID} -G relayer -h ${INSTALL_PATH} -s /sbin/nologin relayer
 
 COPY requirements.txt ${INSTALL_PATH}/requirements.txt
 RUN pip install --no-cache-dir --break-system-packages -r ${INSTALL_PATH}/requirements.txt \
 && rm -rf /var/cache/apk/*
 
+### Add Files
 COPY app ${INSTALL_PATH}/app
 COPY wsgi.py ${INSTALL_PATH}/wsgi.py
-RUN chown -R relayer:relayer ${INSTALL_PATH}
 
-# s6 service definition -- starts gunicorn as the relayer user under s6,
-# same pattern as the Dovecot/ViMbAdmin images built on this base image.
+### Services
 COPY --chmod=755 content/etc/s6-overlay /etc/s6-overlay
 
 EXPOSE 8080
